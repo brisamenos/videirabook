@@ -1,0 +1,457 @@
+/* VideiraBook — área do aluno */
+(function () {
+  const { esc, icone, $, $$ } = VB;
+
+  // ── Moldura (topo + barra inferior no celular)
+  function moldura(ativo, conteudo) {
+    const ehProf = VB.me.papel === 'professor';
+    const links = [
+      ['inicio', '#/inicio', 'Início', icone.casa],
+      ['jornada', '#/jornada', 'Jornada', icone.vinha],
+      ['avisos', '#/avisos', 'Avisos', icone.sino],
+      ['perfil', '#/perfil', 'Perfil', icone.pessoa],
+    ];
+    document.getElementById('app').innerHTML = `
+      <header class="topo"><div class="topo-in">
+        <a class="marca" href="#/inicio"><img src="/img/logo.svg" alt="">VideiraBook</a>
+        <nav class="nav" aria-label="Principal">
+          ${links.map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[2]}</a>`).join('')}
+          ${ehProf ? '<a href="#/p/painel">Painel do professor</a>' : ''}
+        </nav>
+        <a class="usuario-chip" href="#/perfil" style="text-decoration:none;color:inherit" aria-label="Meu perfil">
+          <span class="avatar">${esc(VB.iniciais(VB.me.nome))}</span>
+          <span class="nome pequeno">${esc(VB.primeiroNome(VB.me.nome))}</span>
+        </a>
+      </div></header>
+      <main class="pagina" id="conteudo">${conteudo}</main>
+      <nav class="tabbar" aria-label="Navegação">
+        ${(ehProf ? [...links.slice(0, 3), ['painel', '#/p/painel', 'Professor', icone.painel]] : links)
+          .map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}<span>${l[2]}</span></a>`).join('')}
+      </nav>`;
+  }
+  VB.molduraAluno = moldura;
+
+  // ── Início
+  VB.registrar(/^\/inicio$/, 'todos', async () => {
+    moldura('inicio', '<div class="carregando"></div>');
+    document.title = 'Início · VideiraBook';
+    const d = await VB.api('/api/inicio');
+    const cfg = d.config;
+    const e = d.proximoEncontro;
+    const cont = d.continuar;
+    const curso = d.cursos[0];
+    const dias = e ? VB.diasAte(e.data_encontro) : null;
+    const quando = dias === 0 ? 'O encontro é hoje' : dias === 1 ? 'O encontro é amanhã' : dias > 1 ? `Faltam ${dias} dias para o encontro` : '';
+
+    const blocoEncontro = e ? `
+      <section class="encontro" aria-labelledby="enc-tit">
+        ${VB.arteCacho}
+        ${quando ? `<div class="contagem">${quando}</div>` : ''}
+        <div class="encontro-data">
+          <div class="calendario"><b>${VB.diaNum(e.data_encontro)}</b><span>${VB.mesAbrev(e.data_encontro)}</span></div>
+          <p><strong>Semana ${e.semana} · ${esc(VB.dataLonga(e.data_encontro))}</strong>${esc(cfg.horario || '')}${cfg.duracao_min ? ` · ${cfg.duracao_min} minutos` : ''}${cfg.local ? ` · ${esc(cfg.local)}` : ''}</p>
+        </div>
+        <h2 id="enc-tit">${esc(e.titulo)}</h2>
+        <p class="sub">${esc(e.subtitulo || '')}</p>
+        <div class="acoes">
+          ${e.status !== 'bloqueada' ? `<a class="btn" href="#/aula/${e.id}">${e.concluida ? 'Revisar a aula' : e.pre_estudo ? 'Fazer o pré-estudo' : 'Abrir a aula'}</a>` : `<span class="btn sec" aria-disabled="true">${icone.cadeado}${esc(e.motivo)}</span>`}
+          <a class="btn sec" href="#/jornada">Ver a jornada</a>
+        </div>
+      </section>` : `
+      <section class="encontro"><h2>Nenhum encontro agendado</h2><p class="sub">Quando o professor definir as datas, o próximo encontro aparece aqui.</p>
+      <div class="acoes"><a class="btn" href="#/jornada">Ver a jornada</a></div></section>`;
+
+    const blocoContinuar = cont && (!e || cont.id !== e.id) ? `
+      <div class="painel">
+        <div class="painel-cab"><h3>Continue de onde parou</h3><span class="selo vinho">Semana ${cont.semana}</span></div>
+        <p style="margin:0 0 .3rem;font:500 1.2rem var(--serif)">${esc(cont.titulo)}</p>
+        <p class="muted pequeno" style="margin:0 0 1rem">${cont.itens_feitos} de ${cont.itens_total} itens do checklist feitos</p>
+        <a class="btn sec" href="#/aula/${cont.id}">Continuar a aula</a>
+      </div>` : '';
+
+    const blocoProgresso = curso ? `
+      <div class="painel">
+        <h3>${esc(curso.titulo)}</h3>
+        <div class="progresso-curso">
+          ${VB.anel(curso.resumo.percentual)}
+          <div><p style="margin:0;font:500 1.15rem var(--serif)">${curso.resumo.concluidas} de ${curso.resumo.total} aulas concluídas</p>
+          <p class="muted pequeno" style="margin:.2rem 0 0">Uma aula é concluída quando todo o checklist está marcado.</p></div>
+        </div>
+        <ul class="modulos-mini">
+          ${curso.modulos.map(m => `<li><span>${esc(m.titulo)}</span><span class="muted">${m.concluidas}/${m.total}</span>${VB.barra(m.total ? m.concluidas / m.total * 100 : 0)}</li>`).join('')}
+        </ul>
+      </div>` : '';
+
+    const blocoAvisos = `
+      <div class="painel">
+        <div class="painel-cab"><h3>Avisos</h3><a href="#/avisos" class="pequeno">Ver todos</a></div>
+        ${d.avisos.length ? d.avisos.slice(0, 3).map(avisoHtml).join('') : '<p class="muted" style="margin:0">Nenhum aviso por enquanto.</p>'}
+      </div>`;
+
+    $('#conteudo').innerHTML = `
+      <div class="saudacao">
+        <div><h1>${VB.saudacao()}, ${esc(VB.primeiroNome(VB.me.nome))}</h1>
+        <p>${esc(cfg.nome_turma || '')}${cfg.dia_semana ? ` · encontros às ${VB.DIAS[Number(cfg.dia_semana)].toLowerCase()}s` : ''}</p></div>
+      </div>
+      <div class="inicio-grade">
+        <div>${blocoEncontro}${blocoContinuar ? `<div style="margin-top:20px">${blocoContinuar}</div>` : ''}<div style="margin-top:20px">${blocoAvisos}</div></div>
+        <div>${blocoProgresso}</div>
+      </div>`;
+  });
+
+  function avisoHtml(a) {
+    return `<article class="aviso"><h4>${a.fixado ? `<span class="fixado" title="Fixado">${icone.alfinete.replace('<svg', '<svg width="15" height="15"')}</span>` : ''}${esc(a.titulo)}</h4>
+      <p>${esc(a.texto)}</p><time>${VB.quando(a.criado_em)}</time></article>`;
+  }
+
+  // ── Jornada (lista de cursos ou o próprio curso)
+  VB.registrar(/^\/jornada$/, 'todos', async () => {
+    moldura('jornada', '<div class="carregando"></div>');
+    const cursos = await VB.api('/api/cursos');
+    const visiveis = cursos.filter(c => c.publicado || VB.me.papel === 'professor');
+    if (visiveis.length === 1) return trilha(visiveis[0].id);
+    document.title = 'Jornada · VideiraBook';
+    $('#conteudo').innerHTML = `
+      <div class="trilha-cab"><div><h1>Sua jornada</h1><p>Escolha um estudo para continuar.</p></div></div>
+      ${visiveis.length ? visiveis.map(c => `
+        <a class="folha-aula" href="#/curso/${c.id}" style="margin-bottom:14px">
+          <h3>${esc(c.titulo)}</h3>
+          <div class="meta"><span>${c.resumo.total} aulas</span><span>${c.modulos} módulos</span></div>
+          <div class="estado">${VB.anel(c.resumo.percentual, 62)}</div>
+        </a>`).join('') : '<div class="vazio"><strong>Nenhum estudo disponível</strong>O professor ainda não publicou um curso.</div>'}`;
+  });
+  VB.registrar(/^\/curso\/(\d+)$/, 'todos', id => { moldura('jornada', '<div class="carregando"></div>'); return trilha(id); });
+
+  // Nós desenhados na videira
+  const NO = {
+    concluida: `<svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4C8 8 5 15 7 26c9-1 17-7 19-20-3-1.5-6.5-2-10-2z" fill="var(--folha-2)"/><path d="M8 25C13 18 17 13 23 8" stroke="#E3ECDD" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>`,
+    atual: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="14" fill="var(--vinho-claro)"/><circle cx="16" cy="16" r="8.5" fill="var(--vinho-2)"/></svg>`,
+    disponivel: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="9" fill="var(--papel)" stroke="var(--vinho-2)" stroke-width="2.4"/></svg>`,
+    bloqueada: `<svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="7" fill="var(--fundo)" stroke="var(--fraco)" stroke-width="1.6" stroke-dasharray="3 2.4"/></svg>`,
+    modulo: `<svg viewBox="0 0 28 28" aria-hidden="true"><g fill="var(--ouro)"><circle cx="9" cy="10" r="4"/><circle cx="17" cy="10" r="4"/><circle cx="13" cy="16.5" r="4"/><circle cx="13" cy="23" r="3.4"/></g><path d="M13 6c0-3 2-5 5-5.5" stroke="var(--ouro)" stroke-width="1.6" fill="none"/></svg>`,
+  };
+
+  async function trilha(id) {
+    const v = await VB.api(`/api/cursos/${id}`);
+    document.title = `${v.curso.titulo} · VideiraBook`;
+    const atualId = (v.aulas.find(a => a.status === 'disponivel') || {}).id;
+    let n = 0;
+    $('#conteudo').innerHTML = `
+      <div class="trilha-cab">
+        <div><h1>${esc(v.curso.titulo)}</h1><p>${esc(v.curso.descricao || '')}</p></div>
+        ${VB.anel(v.resumo.percentual, 96)}
+      </div>
+      <div class="legenda" style="margin-bottom:1.4rem">
+        <span><i style="background:var(--folha-2)"></i>Concluída</span>
+        <span><i style="background:var(--vinho-2)"></i>Aberta</span>
+        <span><i style="border:1.5px dashed var(--fraco)"></i>Ainda fechada</span>
+      </div>
+      <div class="vinha" id="vinha">
+        <svg class="caule" id="caule"></svg>
+        ${v.modulos.map(m => `
+          <div class="ramo-modulo">
+            <span class="no-modulo" data-no>${NO.modulo}</span>
+            <span class="num-mod">Módulo ${++n}</span>
+            <h2>${esc(m.titulo)}</h2>
+            ${m.descricao ? `<p>${esc(m.descricao)}</p>` : ''}
+          </div>
+          ${m.aulas.map(a => {
+            const est = a.status === 'concluida' ? 'concluida' : a.status === 'bloqueada' ? 'bloqueada' : (a.id === atualId ? 'atual' : 'disponivel');
+            const tag = a.status === 'bloqueada' ? 'div' : 'a';
+            return `<${tag} class="folha-aula ${est === 'atual' ? 'atual' : ''} ${a.status === 'bloqueada' ? 'bloqueada' : ''}" ${tag === 'a' ? `href="#/aula/${a.id}"` : 'aria-disabled="true"'} data-estado="${est}">
+              <span class="no" data-no data-feito="${a.concluida ? 1 : 0}">${NO[est]}</span>
+              <span class="semana">Semana ${a.semana}${a.data_encontro ? ` · ${VB.dataCurta(a.data_encontro)}` : ''}${!a.publicada ? ' · rascunho' : ''}</span>
+              <h3>${esc(a.titulo)}</h3>
+              <div class="meta">${a.texto_base ? `<span>${esc(a.texto_base)}</span>` : ''}${a.pre_estudo ? `<span>${a.pre_estudo} pré-estudo${a.pre_estudo > 1 ? 's' : ''}</span>` : ''}</div>
+              <div class="estado">${a.status === 'concluida' ? '<span class="selo verde">Concluída</span>'
+                : a.status === 'bloqueada' ? `<span class="selo">${icone.cadeado.replace('<svg', '<svg width="13" height="13"')}${esc(a.motivo)}</span>`
+                : `<span class="selo vinho">${a.progresso}% feito</span>`}</div>
+            </${tag}>`;
+          }).join('')}
+        `).join('')}
+      </div>`;
+    desenharCaule();
+    window.removeEventListener('resize', desenharCaule);
+    window.addEventListener('resize', desenharCaule);
+    const atual = $('.folha-aula.atual');
+    if (atual && v.resumo.concluidas > 1) atual.scrollIntoView({ block: 'center' });
+  }
+
+  // Desenha o caule da videira ligando os nós; o trecho já percorrido fica verde
+  function desenharCaule() {
+    const vinha = $('#vinha'), svg = $('#caule');
+    if (!vinha || !svg) return;
+    const base = vinha.getBoundingClientRect();
+    const nos = $$('[data-no]', vinha).map(el => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left - base.left + r.width / 2, y: r.top - base.top + r.height / 2, feito: el.dataset.feito === '1', modulo: el.classList.contains('no-modulo') };
+    });
+    if (nos.length < 2) return;
+    let ultimoFeito = -1;
+    nos.forEach((p, i) => { if (p.feito) ultimoFeito = i; });
+    const seg = (a, b, i) => {
+      const dy = b.y - a.y, s = i % 2 ? 9 : -9;
+      return `C ${a.x + s} ${a.y + dy * .4}, ${b.x + s} ${b.y - dy * .4}, ${b.x} ${b.y}`;
+    };
+    let todo = `M ${nos[0].x} ${nos[0].y - 18} L ${nos[0].x} ${nos[0].y} `;
+    let feito = '';
+    for (let i = 1; i < nos.length; i++) {
+      todo += seg(nos[i - 1], nos[i], i) + ' ';
+      if (i <= ultimoFeito) feito += (feito ? '' : `M ${nos[0].x} ${nos[0].y - 18} L ${nos[0].x} ${nos[0].y} `) + seg(nos[i - 1], nos[i], i) + ' ';
+    }
+    // gavinhas decorativas ao lado dos nós de módulo
+    const gav = nos.filter(p => p.modulo).map(p => `M ${p.x} ${p.y + 16} q -14 6 -10 18 q 3 6 8 2`).join(' ');
+    svg.setAttribute('viewBox', `0 0 ${svg.clientWidth} ${vinha.clientHeight}`);
+    svg.innerHTML = `<path d="${todo}" fill="none" stroke="#C9CFC2" stroke-width="3" stroke-linecap="round"/>
+      ${feito ? `<path d="${feito}" fill="none" stroke="var(--folha-2)" stroke-width="3.4" stroke-linecap="round"/>` : ''}
+      <path d="${gav}" fill="none" stroke="#C9CFC2" stroke-width="1.6" stroke-linecap="round"/>`;
+  }
+
+  // ── Aula
+  VB.registrar(/^\/aula\/(\d+)$/, 'todos', async id => {
+    moldura('jornada', '<div class="carregando"></div>');
+    let d;
+    try { d = await VB.api(`/api/aulas/${id}`); }
+    catch (e) {
+      if (e.status === 403 || e.status === 404) {
+        $('#conteudo').innerHTML = `<div class="bloqueio">${VB.anel(0, 72, 'var(--fraco)').replace('0%', '')}
+          <h1>${e.status === 403 ? 'Esta aula ainda está fechada' : 'Aula não encontrada'}</h1><p>${esc(e.message)}</p>
+          <a class="btn" href="#/jornada">Voltar para a jornada</a></div>`;
+        return;
+      }
+      throw e;
+    }
+    renderAula(d);
+  });
+
+  function renderAula(d) {
+    const a = d.aula;
+    document.title = `${a.titulo} · VideiraBook`;
+    const pre = d.materiais.filter(m => m.pre_estudo);
+    const outros = d.materiais.filter(m => !m.pre_estudo);
+    const itemPorMaterial = {};
+    d.checklist.forEach(c => { if (c.material_id) itemPorMaterial[c.material_id] = c; });
+    const temLivro = d.curso.livro_arquivo && a.pagina_inicio;
+    const urlLivro = temLivro ? `/arquivos/${encodeURIComponent(d.curso.livro_arquivo)}#page=${a.pagina_inicio}` : '';
+    const ehProf = VB.me.papel === 'professor';
+
+    const material = m => {
+      const it = itemPorMaterial[m.id];
+      const marca = it ? `<button class="btn mini ${it.feito ? 'verde' : 'sec'}" data-marcar="${it.id}">${it.feito ? `${icone.check}Visto` : 'Marcar como visto'}</button>` : '';
+      let corpo = '', acoes = '';
+      const arq = m.arquivo ? `/arquivos/${encodeURIComponent(m.arquivo)}` : '';
+      if (m.tipo === 'video' || m.tipo === 'audio') {
+        corpo = VB.embed(m);
+        if (!corpo && m.url) acoes = `<a class="btn sec mini" href="${esc(m.url)}" target="_blank" rel="noopener">${icone.externo}Abrir ${m.tipo === 'audio' ? 'áudio' : 'vídeo'}</a>`;
+      } else if (m.tipo === 'pdf') {
+        const src = arq || m.url;
+        acoes = `<a class="btn sec mini" href="${esc(src)}" target="_blank" rel="noopener">${icone.externo}Abrir PDF</a>
+          ${arq ? `<button class="btn fantasma mini" data-ver-pdf="${esc(src)}">Ver nesta página</button>` : ''}`;
+        corpo = `<div class="pdf-alvo"></div>`;
+      } else if (m.tipo === 'texto') {
+        corpo = `<div class="leitura" style="font-size:1.08rem">${VB.limparHtml(String(m.conteudo || '').split(/\n{2,}/).map(p => `<p>${esc(p).replace(/\n/g, '<br>')}</p>`).join(''))}</div>`;
+      } else if (m.tipo === 'link') {
+        acoes = `<a class="btn sec mini" href="${esc(m.url)}" target="_blank" rel="noopener">${icone.externo}Acessar link</a>`;
+      }
+      return `<article class="material">
+        <div class="material-cab"><span class="tipo">${VB.iconeTipo(m.tipo)}</span>
+          <div><h4>${esc(m.titulo)}</h4>${m.descricao ? `<p>${esc(m.descricao)}</p>` : `<p>${VB.nomeTipo[m.tipo] || ''}${m.arquivo_nome ? ` · ${esc(m.arquivo_nome)}` : ''}</p>`}</div></div>
+        ${corpo ? `<div class="corpo">${corpo}</div>` : ''}
+        ${acoes || marca ? `<div class="acoes">${acoes}${marca}</div>` : ''}
+      </article>`;
+    };
+
+    const quizHtml = () => {
+      const q = d.quiz;
+      if (!q.perguntas.length) return '';
+      if (q.resposta) {
+        const r = q.resposta;
+        return `<div class="resultado"><div><strong>${r.acertos} de ${r.total}</strong><div class="pequeno muted">acertos no questionário</div></div>
+          <button class="btn sec mini" id="refazer">Refazer questionário</button></div>
+          ${q.perguntas.map((p, i) => `<div class="quiz-q"><h4>${i + 1}. ${esc(p.pergunta)}</h4>
+            ${p.opcoes.map((o, j) => {
+              const marcada = Number(r.respostas[p.id]) === j;
+              const cls = j === p.correta ? 'certa' : marcada ? 'errada' : '';
+              return `<div class="opcao ${cls}">${j === p.correta ? icone.check.replace('<svg', '<svg width="18" height="18" style="color:var(--folha)"') : `<span style="width:18px"></span>`}<span>${esc(o)}${marcada && j !== p.correta ? ' <small class="muted">(sua resposta)</small>' : ''}</span></div>`;
+            }).join('')}
+            ${p.explicacao ? `<p class="explicacao">${esc(p.explicacao)}</p>` : ''}</div>`).join('')}`;
+      }
+      return `<form id="form-quiz">
+        ${q.perguntas.map((p, i) => `<fieldset class="quiz-q" style="border:1px solid var(--linha-2)"><legend class="sr">Pergunta ${i + 1}</legend><h4>${i + 1}. ${esc(p.pergunta)}</h4>
+          ${p.opcoes.map((o, j) => `<label class="opcao"><input type="radio" name="q${p.id}" value="${j}" required><span>${esc(o)}</span></label>`).join('')}</fieldset>`).join('')}
+        <button class="btn" type="submit">Enviar respostas</button></form>`;
+    };
+
+    const sumario = [
+      pre.length && ['pre', 'Pré-estudo'], temLivro && ['livro', 'Leitura'], a.conteudo_html && ['explicacao', 'Explicação'],
+      outros.length && ['materiais', 'Materiais'], d.quiz.perguntas.length && ['quiz', 'Questionário'],
+    ].filter(Boolean);
+
+    $('#conteudo').innerHTML = `
+      <div class="aula-cab">
+        <div class="migalha"><a href="#/curso/${d.curso.id}">${esc(d.curso.titulo)}</a><span>/</span><span>${esc(a.modulo_titulo)}</span><span>/</span><span>Semana ${a.semana || '—'} de ${d.total_aulas}</span>
+          ${ehProf ? `<a class="btn mini sec" style="margin-left:auto" href="#/p/aula/${a.id}">${icone.lapis}Editar esta aula</a>` : ''}</div>
+        <h1>${esc(a.titulo)}</h1>
+        ${a.subtitulo ? `<p class="subtitulo">${esc(a.subtitulo)}</p>` : ''}
+        ${a.texto_base || a.data_encontro ? `<div class="texto-base">
+          ${a.texto_base ? `<div><span>Texto-base</span><strong>${esc(a.texto_base)}</strong></div>` : '<div></div>'}
+          ${a.data_encontro ? `<div style="text-align:right"><span>Encontro</span><strong>${esc(VB.dataLonga(a.data_encontro))}</strong></div>` : ''}
+        </div>` : ''}
+        <a href="#" class="selo vinho chip-check" data-ir="check-cartao">Checklist ${d.checklist.filter(c => c.feito).length} de ${d.checklist.length}</a>
+      </div>
+      <div class="aula-layout">
+        <div class="aula-principal">
+          ${a.objetivo || a.topicos.length ? `<section class="secao"><h2>Objetivo da aula</h2>
+            ${a.objetivo ? `<p class="objetivo">${esc(a.objetivo)}</p>` : ''}
+            ${a.topicos.length ? `<ul class="topicos">${a.topicos.map(t => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}</section>` : ''}
+
+          ${pre.length ? `<section class="secao" id="pre"><h2>Pré-estudo <small>antes do encontro</small></h2>${pre.map(material).join('')}</section>` : ''}
+
+          ${temLivro ? `<section class="secao" id="livro"><h2>Leitura no livro-texto</h2>
+            <div class="livro-cartao"><div><strong>Páginas ${a.pagina_inicio} a ${a.pagina_fim || a.pagina_inicio}</strong><span>${esc(d.curso.livro_nome || 'Livro-texto')}</span></div>
+            <a class="btn verde" href="${urlLivro}" target="_blank" rel="noopener">${icone.livro}Abrir na página ${a.pagina_inicio}</a></div></section>`
+            : a.pagina_inicio ? `<section class="secao" id="livro"><h2>Leitura no livro-texto</h2><div class="livro-cartao"><div><strong>Páginas ${a.pagina_inicio} a ${a.pagina_fim || a.pagina_inicio}</strong><span>Leia no seu exemplar do livro</span></div></div></section>` : ''}
+
+          ${a.conteudo_html ? `<section class="secao" id="explicacao"><h2>Explicação</h2><div class="leitura">${VB.limparHtml(a.conteudo_html)}</div></section>` : ''}
+
+          ${outros.length ? `<section class="secao" id="materiais"><h2>Materiais da aula</h2>${outros.map(material).join('')}</section>` : ''}
+
+          ${a.reflexao.length ? `<section class="secao"><h2>Para refletir</h2><ol class="reflexao">${a.reflexao.map(r => `<li>${esc(r)}</li>`).join('')}</ol></section>` : ''}
+
+          ${a.aplicacao ? `<section class="secao"><h2>Aplicação para a semana</h2><div class="aplicacao">${esc(a.aplicacao)}</div></section>` : ''}
+
+          ${d.quiz.perguntas.length ? `<section class="secao" id="quiz"><h2>Questionário <small>${d.quiz.perguntas.length} perguntas</small></h2><div id="quiz-alvo">${quizHtml()}</div></section>` : ''}
+
+          <section class="secao notas"><h2>Minhas anotações</h2>
+            <textarea class="input" id="notas" placeholder="Escreva aqui suas respostas às perguntas de reflexão, dúvidas para o encontro ou o que Deus falou com você.">${esc(d.anotacao ? d.anotacao.texto : '')}</textarea>
+            <div class="salvo" id="salvo">${d.anotacao ? `Salvo ${VB.quando(d.anotacao.atualizado_em)}` : 'Suas anotações são salvas automaticamente e só você as vê.'}</div>
+          </section>
+
+          <nav class="nav-aulas" aria-label="Navegação entre aulas">
+            ${d.anterior ? `<a href="#/aula/${d.anterior.id}"><span>Aula anterior</span><strong>${esc(d.anterior.titulo)}</strong></a>` : '<span></span>'}
+            ${d.proxima ? `<a class="prox ${d.proxima.status === 'bloqueada' ? 'bloq' : ''}" href="#/aula/${d.proxima.id}" id="link-prox"><span>${d.proxima.status === 'bloqueada' ? 'Próxima aula (fechada)' : 'Próxima aula'}</span><strong>${esc(d.proxima.titulo)}</strong></a>` : ''}
+          </nav>
+        </div>
+
+        <aside class="lateral-aula">
+          <div class="check-cartao" id="check-cartao"></div>
+          ${sumario.length > 1 ? `<nav class="painel" style="margin-top:16px;padding:16px 20px" aria-label="Nesta aula"><h3 style="font-size:1.05rem;margin-bottom:.4rem">Nesta aula</h3>
+            ${sumario.map(s => `<a href="#" data-ir="${s[0]}" style="display:block;padding:.3rem 0;text-decoration:none" class="pequeno">${s[1]}</a>`).join('')}</nav>` : ''}
+        </aside>
+      </div>`;
+
+    desenharChecklist(d);
+
+    // Ações
+    $$('[data-ir]').forEach(l => l.addEventListener('click', e => { e.preventDefault(); document.getElementById(l.dataset.ir).scrollIntoView({ behavior: 'smooth' }); }));
+    $$('[data-ver-pdf]').forEach(b => b.addEventListener('click', () => {
+      const alvo = b.closest('.material').querySelector('.pdf-alvo');
+      if (alvo.innerHTML) { alvo.innerHTML = ''; b.textContent = 'Ver nesta página'; return; }
+      alvo.innerHTML = `<iframe class="pdf-frame" src="${b.dataset.verPdf}" title="PDF"></iframe>`; b.textContent = 'Fechar visualização';
+    }));
+    $$('[data-marcar]').forEach(b => b.addEventListener('click', () => {
+      const it = d.checklist.find(c => c.id === Number(b.dataset.marcar));
+      alternar(d, it, !it.feito);
+    }));
+    const fq = $('#form-quiz');
+    if (fq) fq.addEventListener('submit', async e => {
+      e.preventDefault();
+      const respostas = {};
+      d.quiz.perguntas.forEach(p => { const m = fq.querySelector(`input[name=q${p.id}]:checked`); if (m) respostas[p.id] = Number(m.value); });
+      try {
+        const r = await VB.api(`/api/aulas/${a.id}/quiz`, { method: 'POST', body: { respostas } });
+        VB.toast(`Questionário enviado: ${r.acertos} de ${r.total} acertos`);
+        recarregar(a.id, 'quiz');
+      } catch (er) { VB.erro(er); }
+    });
+    const rf = $('#refazer');
+    if (rf) rf.addEventListener('click', async () => { await VB.api(`/api/aulas/${a.id}/quiz`, { method: 'DELETE' }); recarregar(a.id, 'quiz'); });
+
+    let tNota;
+    $('#notas').addEventListener('input', e => {
+      clearTimeout(tNota); $('#salvo').textContent = 'Salvando…';
+      tNota = setTimeout(async () => {
+        try { await VB.api(`/api/aulas/${a.id}/anotacao`, { method: 'PUT', body: { texto: e.target.value } }); $('#salvo').textContent = 'Salvo agora'; }
+        catch (er) { $('#salvo').textContent = 'Não foi possível salvar. Verifique a conexão.'; }
+      }, 900);
+    });
+  }
+
+  async function recarregar(id, ancora) {
+    const d = await VB.api(`/api/aulas/${id}`);
+    const y = window.scrollY;
+    renderAula(d);
+    if (ancora && document.getElementById(ancora)) document.getElementById(ancora).scrollIntoView();
+    else window.scrollTo(0, y);
+  }
+
+  function desenharChecklist(d) {
+    const alvo = $('#check-cartao');
+    const total = d.checklist.length, feitos = d.checklist.filter(c => c.feito).length;
+    const obrig = d.checklist.filter(c => c.tipo !== 'encontro');
+    const concluida = obrig.length && obrig.every(c => c.feito);
+    const ehProf = VB.me.papel === 'professor';
+    const chip = $('.chip-check'); if (chip) chip.textContent = `Checklist ${feitos} de ${total}`;
+    alvo.innerHTML = `
+      <h3>Checklist da aula</h3>
+      <div class="check-progresso">${VB.barra(total ? feitos / total * 100 : 0)}<span>${feitos}/${total}</span></div>
+      <ul class="checklist">
+        ${d.checklist.map(c => {
+          const auto = c.tipo === 'encontro' || c.tipo === 'quiz';
+          const dica = c.tipo === 'encontro' ? 'O professor marca a sua presença' : c.tipo === 'quiz' ? 'Marcado ao enviar o questionário' : '';
+          return `<li><label class="check ${c.feito ? 'feito' : ''}"><input type="checkbox" data-item="${c.id}" ${c.feito ? 'checked' : ''} ${auto || ehProf ? 'disabled' : ''}>
+            <span>${esc(c.texto)}${dica ? `<small>${dica}</small>` : ''}</span></label></li>`;
+        }).join('')}
+      </ul>
+      ${concluida ? `<div class="concluida-msg">Aula concluída. ${d.proxima ? 'A próxima já pode ser aberta.' : 'Você chegou ao fim da jornada!'}</div>` : ''}
+      ${ehProf ? '<p class="pequeno muted" style="margin:.8rem 0 0">Você está vendo a aula como o aluno vê.</p>' : ''}`;
+    $$('input[data-item]', alvo).forEach(inp => inp.addEventListener('change', () => {
+      const it = d.checklist.find(c => c.id === Number(inp.dataset.item));
+      alternar(d, it, inp.checked);
+    }));
+  }
+
+  async function alternar(d, it, feito) {
+    try {
+      await VB.api(`/api/aulas/${d.aula.id}/checklist/${it.id}`, { method: 'POST', body: { feito } });
+      const antes = d.checklist.filter(c => c.tipo !== 'encontro').every(c => c.feito);
+      it.feito = feito;
+      const depois = d.checklist.filter(c => c.tipo !== 'encontro').every(c => c.feito);
+      if (depois !== antes) return recarregar(d.aula.id);
+      desenharChecklist(d);
+      const b = document.querySelector(`[data-marcar="${it.id}"]`);
+      if (b) { b.className = `btn mini ${feito ? 'verde' : 'sec'}`; b.innerHTML = feito ? `${icone.check}Visto` : 'Marcar como visto'; }
+    } catch (e) { VB.erro(e); desenharChecklist(d); }
+  }
+
+  // ── Avisos
+  VB.registrar(/^\/avisos$/, 'todos', async () => {
+    moldura('avisos', '<div class="carregando"></div>');
+    document.title = 'Avisos · VideiraBook';
+    const lista = await VB.api('/api/avisos');
+    $('#conteudo').innerHTML = `<div class="estreita"><div class="saudacao"><div><h1>Avisos</h1><p>Recados do professor para a turma.</p></div></div>
+      <div class="painel">${lista.length ? lista.map(avisoHtml).join('') : '<p class="muted" style="margin:0">Nenhum aviso por enquanto.</p>'}</div></div>`;
+  });
+
+  // ── Perfil
+  VB.registrar(/^\/perfil$/, 'todos', async () => {
+    moldura('perfil', '');
+    document.title = 'Perfil · VideiraBook';
+    $('#conteudo').innerHTML = `<div class="estreita">
+      <div class="saudacao"><div><h1>Meu perfil</h1><p>${esc(VB.me.nome)} · usuário <strong>${esc(VB.me.usuario)}</strong></p></div>
+      <button class="btn sec" id="sair">${icone.sair}Sair</button></div>
+      <form class="painel" id="form-senha" style="max-width:460px">
+        <h3>Trocar senha</h3>
+        <label class="campo"><span>Senha atual</span><input class="input" type="password" name="atual" autocomplete="current-password" required></label>
+        <label class="campo"><span>Nova senha</span><input class="input" type="password" name="nova" minlength="6" autocomplete="new-password" required><small>Pelo menos 6 caracteres.</small></label>
+        <button class="btn" type="submit">Salvar nova senha</button>
+      </form></div>`;
+    $('#sair').addEventListener('click', VB.sair);
+    $('#form-senha').addEventListener('submit', async e => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      try { await VB.api('/api/me/senha', { method: 'PUT', body: { atual: f.get('atual'), nova: f.get('nova') } }); VB.toast('Senha alterada'); e.target.reset(); }
+      catch (er) { VB.erro(er); }
+    });
+  });
+})();
