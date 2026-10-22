@@ -188,13 +188,13 @@ window.VB = (function () {
 
   // ── Desenhos (ramos de videira)
   VB.arteRamo = `<svg class="ramo" viewBox="0 0 300 900" fill="none" aria-hidden="true">
-    <path d="M250 -20 C170 120 290 220 200 360 S120 560 210 700 S170 860 140 940" stroke="#7E3B52" stroke-width="3"/>
+    <path d="M250 -20 C170 120 290 220 200 360 S120 560 210 700 S170 860 140 940" stroke="#8DAE7E" stroke-width="3"/>
     <path d="M214 330c-40-10-70 8-84 40 34 10 66-4 84-40z" fill="#5E7F55"/><path d="M214 330c-28 4-56 18-84 40" stroke="#3E5C3A" stroke-width="1.5"/>
     <path d="M232 120c30-26 64-26 86-6-26 26-60 26-86 6z" fill="#5E7F55"/>
     <path d="M190 620c-46-4-74 22-80 58 38 2 68-20 80-58z" fill="#5E7F55"/>
     <g fill="#B48A3F"><circle cx="246" cy="460" r="11"/><circle cx="268" cy="460" r="11"/><circle cx="224" cy="460" r="11"/><circle cx="235" cy="479" r="11"/><circle cx="257" cy="479" r="11"/><circle cx="246" cy="498" r="11"/><circle cx="246" cy="516" r="10"/></g>
-    <path d="M246 449c0-14 6-22 14-26" stroke="#7E3B52" stroke-width="2.5"/>
-    <path d="M170 820c-30-30-24-60 4-78" stroke="#7E3B52" stroke-width="2" /><path d="M222 220c26 6 40 26 36 50" stroke="#7E3B52" stroke-width="2"/>
+    <path d="M246 449c0-14 6-22 14-26" stroke="#8DAE7E" stroke-width="2.5"/>
+    <path d="M170 820c-30-30-24-60 4-78" stroke="#8DAE7E" stroke-width="2" /><path d="M222 220c26 6 40 26 36 50" stroke="#8DAE7E" stroke-width="2"/>
   </svg>`;
   VB.arteCacho = `<svg class="cacho" viewBox="0 0 120 150" fill="#F5EEE4" aria-hidden="true"><path d="M60 22c0-12 6-18 16-20" stroke="#F5EEE4" stroke-width="4" fill="none"/>
     <circle cx="40" cy="40" r="13"/><circle cx="66" cy="40" r="13"/><circle cx="92" cy="40" r="13"/><circle cx="53" cy="62" r="13"/><circle cx="79" cy="62" r="13"/><circle cx="27" cy="62" r="13"/><circle cx="40" cy="84" r="13"/><circle cx="66" cy="84" r="13"/><circle cx="53" cy="106" r="13"/><circle cx="53" cy="128" r="12"/></svg>`;
