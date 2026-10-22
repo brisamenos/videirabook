@@ -242,6 +242,110 @@ window.VB = (function () {
     VB.me = d.usuario; VB.config = d.config;
   };
 
+  // ── Preferências de leitura (ficam salvas só neste aparelho)
+  const ESCALAS = [0.9, 1, 1.12, 1.25, 1.4, 1.6];
+  VB.pref = {
+    get(k, def) { try { const v = localStorage.getItem('vb_' + k); return v === null ? def : v; } catch { return def; } },
+    set(k, v) { try { localStorage.setItem('vb_' + k, String(v)); } catch { /* navegador sem armazenamento */ } },
+  };
+  const idxEscala = () => Math.max(0, Math.min(ESCALAS.length - 1, Number(VB.pref.get('escala', 1)) || 0));
+  VB.aplicarPrefs = function () {
+    const r = document.documentElement;
+    const noite = VB.pref.get('tema', 'dia') === 'noite';
+    r.dataset.tema = noite ? 'noite' : 'dia';
+    r.style.setProperty('--escala-leitura', ESCALAS[idxEscala()]);
+    const m = document.querySelector('meta[name=theme-color]');
+    if (m) m.content = noite ? '#141B16' : '#1E3B2C';
+  };
+  VB.painelLeitura = function () {
+    const rotulo = () => `${Math.round(ESCALAS[idxEscala()] * 100)}%`;
+    VB.modal({
+      titulo: 'Ajustes de leitura',
+      corpo: `<div class="ajuste">
+        <div class="ajuste-linha"><div><strong>Tamanho das letras</strong><small>Vale para os textos das aulas</small></div>
+          <div class="ajuste-tamanho"><button type="button" class="btn sec mini" data-esc="-1" aria-label="Diminuir as letras">A−</button>
+          <b id="esc-rot" aria-live="polite">${rotulo()}</b>
+          <button type="button" class="btn sec mini" data-esc="1" aria-label="Aumentar as letras">A+</button></div></div>
+        <p class="leitura ajuste-amostra">“Lâmpada para os meus pés é tua palavra, e luz para o meu caminho” (Sl 119.105).</p>
+        <label class="ajuste-linha"><div><strong>Leitura noturna</strong><small>Fundo escuro, mais confortável à noite</small></div>
+          <span class="chave"><input type="checkbox" id="tema-noite" ${VB.pref.get('tema', 'dia') === 'noite' ? 'checked' : ''}></span></label>
+      </div>`,
+      rodape: '<button class="btn" data-fechar>Pronto</button>',
+      aoAbrir(el) {
+        el.querySelectorAll('[data-esc]').forEach(b => b.addEventListener('click', () => {
+          VB.pref.set('escala', Math.max(0, Math.min(ESCALAS.length - 1, idxEscala() + Number(b.dataset.esc))));
+          VB.aplicarPrefs(); el.querySelector('#esc-rot').textContent = rotulo();
+        }));
+        el.querySelector('#tema-noite').addEventListener('change', e => { VB.pref.set('tema', e.target.checked ? 'noite' : 'dia'); VB.aplicarPrefs(); });
+      },
+    });
+  };
+
+  // ── Bíblia: livros, versões e links (o texto abre no site Bíblia Online)
+  VB.VERSOES = [['nvt', 'NVT', 'Nova Versão Transformadora'], ['ara', 'ARA', 'Almeida Revista e Atualizada'],
+    ['arc', 'ARC', 'Almeida Revista e Corrigida'], ['nvi', 'NVI', 'Nova Versão Internacional']];
+  // [nome, abreviação, código no site, capítulos, outros nomes]
+  VB.LIVROS = [
+    ['Gênesis', 'Gn', 'gn', 50], ['Êxodo', 'Êx', 'ex', 40, ['Ex']], ['Levítico', 'Lv', 'lv', 27], ['Números', 'Nm', 'nm', 36],
+    ['Deuteronômio', 'Dt', 'dt', 34], ['Josué', 'Js', 'js', 24], ['Juízes', 'Jz', 'jz', 21], ['Rute', 'Rt', 'rt', 4],
+    ['1 Samuel', '1 Sm', '1sm', 31], ['2 Samuel', '2 Sm', '2sm', 24], ['1 Reis', '1 Rs', '1rs', 22], ['2 Reis', '2 Rs', '2rs', 25],
+    ['1 Crônicas', '1 Cr', '1cr', 29], ['2 Crônicas', '2 Cr', '2cr', 36], ['Esdras', 'Ed', 'ed', 10], ['Neemias', 'Ne', 'ne', 13],
+    ['Ester', 'Et', 'et', 10], ['Jó', 'Jó', 'jó', 42], ['Salmos', 'Sl', 'sl', 150, ['Salmo']], ['Provérbios', 'Pv', 'pv', 31],
+    ['Eclesiastes', 'Ec', 'ec', 12], ['Cânticos', 'Ct', 'ct', 8, ['Cantares']], ['Isaías', 'Is', 'is', 66], ['Jeremias', 'Jr', 'jr', 52],
+    ['Lamentações', 'Lm', 'lm', 5], ['Ezequiel', 'Ez', 'ez', 48], ['Daniel', 'Dn', 'dn', 12], ['Oseias', 'Os', 'os', 14, ['Oséias']],
+    ['Joel', 'Jl', 'jl', 3], ['Amós', 'Am', 'am', 9], ['Obadias', 'Ob', 'ob', 1], ['Jonas', 'Jn', 'jn', 4],
+    ['Miqueias', 'Mq', 'mq', 7, ['Miquéias']], ['Naum', 'Na', 'na', 3], ['Habacuque', 'Hc', 'hc', 3], ['Sofonias', 'Sf', 'sf', 3],
+    ['Ageu', 'Ag', 'ag', 2], ['Zacarias', 'Zc', 'zc', 14], ['Malaquias', 'Ml', 'ml', 4],
+    ['Mateus', 'Mt', 'mt', 28], ['Marcos', 'Mc', 'mc', 16], ['Lucas', 'Lc', 'lc', 24], ['João', 'Jo', 'jo', 21],
+    ['Atos', 'At', 'atos', 28], ['Romanos', 'Rm', 'rm', 16], ['1 Coríntios', '1 Co', '1co', 16], ['2 Coríntios', '2 Co', '2co', 13],
+    ['Gálatas', 'Gl', 'gl', 6], ['Efésios', 'Ef', 'ef', 6], ['Filipenses', 'Fp', 'fp', 4], ['Colossenses', 'Cl', 'cl', 4],
+    ['1 Tessalonicenses', '1 Ts', '1ts', 5], ['2 Tessalonicenses', '2 Ts', '2ts', 3], ['1 Timóteo', '1 Tm', '1tm', 6],
+    ['2 Timóteo', '2 Tm', '2tm', 4], ['Tito', 'Tt', 'tt', 3], ['Filemom', 'Fm', 'fm', 1], ['Hebreus', 'Hb', 'hb', 13],
+    ['Tiago', 'Tg', 'tg', 5], ['1 Pedro', '1 Pe', '1pe', 5], ['2 Pedro', '2 Pe', '2pe', 3], ['1 João', '1 Jo', '1jo', 5],
+    ['2 João', '2 Jo', '2jo', 1], ['3 João', '3 Jo', '3jo', 1], ['Judas', 'Jd', 'jd', 1], ['Apocalipse', 'Ap', 'ap', 22],
+  ];
+  VB.versaoBiblia = () => { const v = VB.pref.get('versao', 'nvt'); return VB.VERSOES.some(x => x[0] === v) ? v : 'nvt'; };
+  VB.urlBiblia = (livro, cap, versao = VB.versaoBiblia()) =>
+    `https://www.bibliaonline.com.br/${versao}/${encodeURIComponent(livro[2])}/${cap}`;
+
+  // Reconhece referências como "Jo 3.16", "1 Co 15.3-8" ou "2 Pedro 1.19"
+  const nomesRef = new Map();
+  VB.LIVROS.forEach(l => [l[0], l[1], ...(l[4] || [])].forEach(n => nomesRef.set(n, l)));
+  const escRe = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s?');
+  const reRef = new RegExp(`(^|[^\\p{L}\\d])(${[...nomesRef.keys()].sort((a, b) => b.length - a.length).map(escRe).join('|')})\\s(\\d{1,3})(?:[.:](\\d{1,3}(?:[-–]\\d{1,3})?))?(?![\\dªº\\p{L}])`, 'gu');
+  const AMBIGUAS = new Set(['Os', 'Am', 'At', 'Is', 'Na', 'Ag', 'Ed', 'Et', 'Ne', 'Ec', 'Ct', 'Ob', 'Jn', 'Ml']);
+  VB.livroPorNome = nome => nomesRef.get(nome) || nomesRef.get(nome.replace(/^([123])(?=\S)/, '$1 '));
+  VB.linkarReferencias = function (raiz) {
+    if (!raiz) return;
+    const andar = document.createTreeWalker(raiz, NodeFilter.SHOW_TEXT, {
+      acceptNode: n => n.parentElement.closest('a, button, label, textarea, [contenteditable], .quiz-q') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
+    });
+    const nos = []; while (andar.nextNode()) nos.push(andar.currentNode);
+    const versao = VB.versaoBiblia();
+    const nomeVersao = (VB.VERSOES.find(v => v[0] === versao) || [])[1];
+    nos.forEach(no => {
+      const t = no.nodeValue; reRef.lastIndex = 0;
+      if (!reRef.test(t)) return;
+      reRef.lastIndex = 0;
+      const frag = document.createDocumentFragment(); let ult = 0, m;
+      while ((m = reRef.exec(t))) {
+        const livro = VB.livroPorNome(m[2]);
+        const ini = m.index + m[1].length;
+        if (!livro || (AMBIGUAS.has(m[2]) && !m[4])) continue;   // "Os 12 apóstolos" não é referência
+        const cap = livro[3] === 1 ? 1 : Number(m[3]);          // Judas 6 = capítulo único, versículo 6
+        if (cap < 1 || cap > livro[3]) continue;
+        frag.append(t.slice(ult, ini));
+        const a = document.createElement('a');
+        a.className = 'ref-biblia'; a.href = VB.urlBiblia(livro, cap, versao); a.target = '_blank'; a.rel = 'noopener';
+        a.title = `Abrir ${livro[0]} ${cap} na ${nomeVersao}`;
+        a.textContent = t.slice(ini, m.index + m[0].length);
+        frag.append(a); ult = m.index + m[0].length;
+      }
+      if (!ult) return;
+      frag.append(t.slice(ult)); no.replaceWith(frag);
+    });
+  };
+
   // ── Roteador (hash)
   VB.registrar = (padrao, papel, fn) => VB.rotas.push({ padrao, papel, fn });
   VB.rota = async function () {
@@ -258,6 +362,7 @@ window.VB = (function () {
     location.hash = VB.me.papel === 'professor' ? '#/p/painel' : '#/inicio';
   };
   VB.iniciar = async function () {
+    VB.aplicarPrefs();
     window.addEventListener('hashchange', VB.rota);
     document.getElementById('app').innerHTML = '<div class="carregando"></div>';
     try { await VB.carregarMe(); } catch { return VB.telaLogin(); }

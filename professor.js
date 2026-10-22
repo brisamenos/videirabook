@@ -15,7 +15,8 @@
         <aside class="lateral" id="lateral">
           <a class="marca" href="#/p/painel"><img src="/img/logo.svg" alt="">VideiraBook</a>
           <nav aria-label="Professor">${links.map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}${l[2]}</a>`).join('')}</nav>
-          <nav aria-label="Visão do aluno"><a href="#/inicio">${icone.olho}Ver como aluno</a></nav>
+          <nav aria-label="Visão do aluno"><a href="#/inicio">${icone.olho}Ver como aluno</a><a href="#/biblia">${icone.livro}Bíblia</a>
+            <a href="#" id="btn-leitura-prof"><span class="aa-icone" aria-hidden="true">Aa</span>Leitura e modo noturno</a></nav>
           <div class="rodape"><div style="color:#fff;font-weight:600">${esc(VB.me.nome)}</div>
             <div style="margin:.15rem 0 .6rem">Professor · <a href="#/perfil">trocar senha</a></div>
             <button id="btn-sair">Sair</button></div>
@@ -27,6 +28,7 @@
         </div>
       </div>`;
     $('#btn-sair').addEventListener('click', VB.sair);
+    $('#btn-leitura-prof').addEventListener('click', e => { e.preventDefault(); VB.painelLeitura(); });
     $('#abrir-menu').addEventListener('click', e => { e.stopPropagation(); $('#lateral').classList.add('aberta'); });
     document.addEventListener('click', function f(e) {
       const l = $('#lateral'); if (!l) return document.removeEventListener('click', f);

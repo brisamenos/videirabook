@@ -8,6 +8,7 @@
     const links = [
       ['inicio', '#/inicio', 'Início', icone.casa],
       ['jornada', '#/jornada', 'Jornada', icone.vinha],
+      ['biblia', '#/biblia', 'Bíblia', icone.livro],
       ['avisos', '#/avisos', 'Avisos', icone.sino],
       ['perfil', '#/perfil', 'Perfil', icone.pessoa],
     ];
@@ -18,6 +19,7 @@
           ${links.map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[2]}</a>`).join('')}
           ${ehProf ? '<a href="#/p/painel">Painel do professor</a>' : ''}
         </nav>
+        <button class="btn-leitura" type="button" id="btn-leitura" aria-label="Ajustes de leitura: tamanho das letras e leitura noturna" title="Tamanho das letras e leitura noturna">Aa</button>
         <a class="usuario-chip" href="#/perfil" style="text-decoration:none;color:inherit" aria-label="Meu perfil">
           <span class="avatar">${esc(VB.iniciais(VB.me.nome))}</span>
           <span class="nome pequeno">${esc(VB.primeiroNome(VB.me.nome))}</span>
@@ -25,9 +27,10 @@
       </div></header>
       <main class="pagina" id="conteudo">${conteudo}</main>
       <nav class="tabbar" aria-label="Navegação">
-        ${(ehProf ? [...links.slice(0, 3), ['painel', '#/p/painel', 'Professor', icone.painel]] : links)
+        ${(ehProf ? [...links.slice(0, 4), ['painel', '#/p/painel', 'Professor', icone.painel]] : links)
           .map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}<span>${l[2]}</span></a>`).join('')}
       </nav>`;
+    $('#btn-leitura').addEventListener('click', VB.painelLeitura);
   }
   VB.molduraAluno = moldura;
 
@@ -339,6 +342,8 @@
             ${sumario.map(s => `<a href="#" data-ir="${s[0]}" style="display:block;padding:.3rem 0;text-decoration:none" class="pequeno">${s[1]}</a>`).join('')}</nav>` : ''}
         </aside>
       </div>`;
+    VB.linkarReferencias($('.aula-principal'));
+    VB.linkarReferencias($('.texto-base'));
 
     desenharChecklist(d);
 
@@ -433,6 +438,87 @@
       <div class="painel">${lista.length ? lista.map(avisoHtml).join('') : '<p class="muted" style="margin:0">Nenhum aviso por enquanto.</p>'}</div></div>`;
   });
 
+  // ── Bíblia (abre o capítulo no site Bíblia Online, na versão escolhida)
+  VB.registrar(/^\/biblia$/, 'todos', () => {
+    moldura('biblia', '');
+    document.title = 'Bíblia · VideiraBook';
+    let testamento = VB.pref.get('testamento', 'at');
+    let livro = null;
+    const nomeVersao = c => (VB.VERSOES.find(v => v[0] === c) || [])[1] || '';
+    $('#conteudo').innerHTML = `<div class="estreita biblia">
+      <div class="saudacao"><div><h1>Bíblia</h1><p>Escolha a versão, o livro e o capítulo. O texto abre no site Bíblia Online.</p></div></div>
+      <section class="painel">
+        <h3>Versão</h3>
+        <div class="versoes" role="radiogroup" aria-label="Versão da Bíblia">
+          ${VB.VERSOES.map(v => `<button type="button" role="radio" class="versao" data-versao="${v[0]}"><b>${v[1]}</b><span>${v[2]}</span></button>`).join('')}
+        </div>
+        <label class="campo" style="margin:1rem 0 0"><span>Comparar com outra versão (lado a lado)</span>
+          <select class="input" id="comparar"><option value="">Não comparar</option>${VB.VERSOES.map(v => `<option value="${v[0]}">${v[1]} — ${v[2]}</option>`).join('')}</select></label>
+      </section>
+      <section class="painel" style="margin-top:16px">
+        <form id="busca-ref" class="busca-ref" autocomplete="off">
+          <label class="campo" style="margin:0;flex:1"><span>Ir direto para uma passagem</span>
+            <input class="input" name="ref" placeholder="Ex.: Jo 3.16, Salmos 23, 1 Co 13"></label>
+          <button class="btn" type="submit">Abrir</button>
+        </form>
+        <p class="erro-msg" id="ref-erro"></p>
+      </section>
+      <section class="painel" style="margin-top:16px">
+        <div class="abas-testamento" role="tablist">
+          <button type="button" role="tab" data-test="at">Antigo Testamento</button>
+          <button type="button" role="tab" data-test="nt">Novo Testamento</button>
+        </div>
+        <div id="livros" class="livros"></div>
+        <div id="capitulos" class="capitulos" hidden></div>
+      </section>
+      <p class="pequeno muted" style="margin-top:14px">As versões NVT, ARA, ARC e NVI têm direitos autorais das editoras, por isso o texto é lido no site Bíblia Online, que tem licença para publicá-las. Os versículos citados nas aulas também viram links que abrem na versão escolhida aqui.</p>
+    </div>`;
+
+    const abrir = (l, cap) => {
+      const v = VB.versaoBiblia(); const c = $('#comparar').value;
+      const versoes = c && c !== v ? `${v}+${c}` : v;
+      window.open(VB.urlBiblia(l, cap, versoes), '_blank', 'noopener');
+    };
+    const marcarVersao = () => $$('.versao').forEach(b => b.setAttribute('aria-checked', String(b.dataset.versao === VB.versaoBiblia())));
+    const desenharLivros = () => {
+      $$('.abas-testamento button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.test === testamento)));
+      const lista = testamento === 'at' ? VB.LIVROS.slice(0, 39) : VB.LIVROS.slice(39);
+      $('#livros').innerHTML = lista.map(l => `<button type="button" class="livro-btn${livro === l ? ' ativo' : ''}" data-livro="${esc(l[2])}">${esc(l[0])}</button>`).join('');
+      $('#livros').hidden = false; $('#capitulos').hidden = true;
+    };
+    const desenharCapitulos = () => {
+      $('#livros').hidden = true; $('#capitulos').hidden = false;
+      $('#capitulos').innerHTML = `<div class="cap-cab"><button type="button" class="btn sec mini" id="voltar-livros">← Livros</button>
+        <h3>${esc(livro[0])} <small class="muted">· ${nomeVersao(VB.versaoBiblia())}</small></h3></div>
+        <div class="cap-grade">${Array.from({ length: livro[3] }, (_, i) => `<button type="button" data-cap="${i + 1}">${i + 1}</button>`).join('')}</div>`;
+      $('#voltar-livros').addEventListener('click', desenharLivros);
+      $('#capitulos').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      if (livro[3] === 1) abrir(livro, 1);
+    };
+
+    $$('.versao').forEach(b => b.addEventListener('click', () => {
+      VB.pref.set('versao', b.dataset.versao); marcarVersao(); if (livro && !$('#capitulos').hidden) desenharCapitulos();
+      VB.toast(`Versão ${nomeVersao(b.dataset.versao)} selecionada`);
+    }));
+    $$('.abas-testamento button').forEach(b => b.addEventListener('click', () => { testamento = b.dataset.test; VB.pref.set('testamento', testamento); desenharLivros(); }));
+    $('#livros').addEventListener('click', e => {
+      const b = e.target.closest('[data-livro]'); if (!b) return;
+      livro = VB.LIVROS.find(l => l[2] === b.dataset.livro); desenharCapitulos();
+    });
+    $('#capitulos').addEventListener('click', e => { const b = e.target.closest('[data-cap]'); if (b) abrir(livro, Number(b.dataset.cap)); });
+    $('#busca-ref').addEventListener('submit', e => {
+      e.preventDefault();
+      const txt = e.target.ref.value.trim();
+      const m = txt.match(/^([123]?\s?[\p{L}]+)\s*(\d{1,3})?/u);
+      const nome = m && m[1].trim();
+      const l = nome && (VB.livroPorNome(nome) || VB.LIVROS.find(x => x[0].toLowerCase() === nome.toLowerCase() || x[1].toLowerCase() === nome.toLowerCase()));
+      const cap = Number(m && m[2]) || 1;
+      if (!l || cap > l[3]) { $('#ref-erro').textContent = 'Não encontrei essa passagem. Tente algo como “Jo 3.16” ou “Salmos 23”.'; return; }
+      $('#ref-erro').textContent = ''; abrir(l, cap);
+    });
+    marcarVersao(); desenharLivros();
+  });
+
   // ── Perfil
   VB.registrar(/^\/perfil$/, 'todos', async () => {
     moldura('perfil', '');
@@ -445,7 +531,13 @@
         <label class="campo"><span>Senha atual</span><input class="input" type="password" name="atual" autocomplete="current-password" required></label>
         <label class="campo"><span>Nova senha</span><input class="input" type="password" name="nova" minlength="6" autocomplete="new-password" required><small>Pelo menos 6 caracteres.</small></label>
         <button class="btn" type="submit">Salvar nova senha</button>
-      </form></div>`;
+      </form>
+      <div class="painel" style="max-width:460px;margin-top:16px">
+        <h3>Leitura</h3>
+        <p class="muted pequeno" style="margin:.2rem 0 .9rem">Aumente as letras das aulas ou ative a leitura noturna. O ajuste fica salvo neste aparelho.</p>
+        <button class="btn sec" type="button" id="abrir-leitura">Ajustar leitura</button>
+      </div></div>`;
+    $('#abrir-leitura').addEventListener('click', VB.painelLeitura);
     $('#sair').addEventListener('click', VB.sair);
     $('#form-senha').addEventListener('submit', async e => {
       e.preventDefault();
