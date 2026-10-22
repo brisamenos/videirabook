@@ -33,7 +33,7 @@ const ESTATICOS = {
   '/fonts/figtree-latin-wght-normal.woff2': 'figtree-latin-wght-normal.woff2',
 };
 for (const [url, arq] of Object.entries(ESTATICOS)) {
-  app.get(url, (req, res) => res.sendFile(path.join(__dirname, arq), { maxAge: '1h' }));
+  app.get(url, (req, res) => res.sendFile(path.join(__dirname, arq), { maxAge: 0, lastModified: true }));
 }
 
 // ── Upload
