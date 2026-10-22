@@ -282,8 +282,8 @@ window.VB = (function () {
   };
 
   // ── Bíblia: livros, versões e links (o texto abre no site Bíblia Online)
-  VB.VERSOES = [['nvt', 'NVT', 'Nova Versão Transformadora'], ['ara', 'ARA', 'Almeida Revista e Atualizada'],
-    ['arc', 'ARC', 'Almeida Revista e Corrigida'], ['nvi', 'NVI', 'Nova Versão Internacional']];
+  VB.VERSOES = [['alm', 'Almeida', 'Almeida 1819 · texto aqui no app'], ['nvt', 'NVT', 'Nova Versão Transformadora'],
+    ['ara', 'ARA', 'Almeida Revista e Atualizada'], ['arc', 'ARC', 'Almeida Revista e Corrigida'], ['nvi', 'NVI', 'Nova Versão Internacional']];
   // [nome, abreviação, código no site, capítulos, outros nomes]
   VB.LIVROS = [
     ['Gênesis', 'Gn', 'gn', 50], ['Êxodo', 'Êx', 'ex', 40, ['Ex']], ['Levítico', 'Lv', 'lv', 27], ['Números', 'Nm', 'nm', 36],
@@ -304,7 +304,8 @@ window.VB = (function () {
     ['Tiago', 'Tg', 'tg', 5], ['1 Pedro', '1 Pe', '1pe', 5], ['2 Pedro', '2 Pe', '2pe', 3], ['1 João', '1 Jo', '1jo', 5],
     ['2 João', '2 Jo', '2jo', 1], ['3 João', '3 Jo', '3jo', 1], ['Judas', 'Jd', 'jd', 1], ['Apocalipse', 'Ap', 'ap', 22],
   ];
-  VB.versaoBiblia = () => { const v = VB.pref.get('versao', 'nvt'); return VB.VERSOES.some(x => x[0] === v) ? v : 'nvt'; };
+  VB.versaoBiblia = () => { const v = VB.pref.get('versao', 'alm'); return VB.VERSOES.some(x => x[0] === v) ? v : 'alm'; };
+  VB.rotaBiblia = (livro, cap, verso) => `#/biblia/${encodeURIComponent(livro[2])}/${cap}${verso ? `/${verso}` : ''}`;
   VB.urlBiblia = (livro, cap, versao = VB.versaoBiblia()) =>
     `https://www.bibliaonline.com.br/${versao}/${encodeURIComponent(livro[2])}/${cap}`;
 
@@ -336,8 +337,9 @@ window.VB = (function () {
         if (cap < 1 || cap > livro[3]) continue;
         frag.append(t.slice(ult, ini));
         const a = document.createElement('a');
-        a.className = 'ref-biblia'; a.href = VB.urlBiblia(livro, cap, versao); a.target = '_blank'; a.rel = 'noopener';
-        a.title = `Abrir ${livro[0]} ${cap} na ${nomeVersao}`;
+        const verso = livro[3] === 1 && !m[4] ? Number(m[3]) : parseInt(m[4], 10) || 0;
+        a.className = 'ref-biblia'; a.href = VB.rotaBiblia(livro, cap, verso);
+        a.title = `Ler ${livro[0]} ${cap} (${nomeVersao})`;
         a.textContent = t.slice(ini, m.index + m[0].length);
         frag.append(a); ult = m.index + m[0].length;
       }

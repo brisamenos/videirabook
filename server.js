@@ -674,6 +674,36 @@ P.delete('/avisos/:id', h((req, res) => { db.prepare('DELETE FROM avisos WHERE i
 
 app.use('/api/admin', P);
 
+// ── Bíblia dentro do app (Almeida, domínio público) — texto carregado só quando alguém abre
+let BIBLIA = null;
+function biblia() {
+  if (!BIBLIA) BIBLIA = JSON.parse(fs.readFileSync(path.join(__dirname, 'biblia.json'), 'utf8'));
+  return BIBLIA;
+}
+app.get('/api/biblia/:livro/:cap', auth, h((req, res) => {
+  const b = biblia();
+  const livro = b.livros[Number(req.params.livro)];
+  const versos = livro && livro[Number(req.params.cap) - 1];
+  if (!versos) return res.status(404).json({ erro: 'Capítulo não encontrado.' });
+  res.set('Cache-Control', 'private, max-age=86400');
+  res.json({ versao: b.versao, licenca: b.licenca, versos });
+}));
+
+// O site Bíblia Online deixa ser aberto dentro de outra página? (verificado 1x por dia)
+let embutir = { permitido: null, em: 0 };
+app.get('/api/biblia-externa', auth, h(async (req, res) => {
+  if (Date.now() - embutir.em > 864e5) {
+    try {
+      const r = await fetch('https://www.bibliaonline.com.br/nvt/jo/1', { redirect: 'follow', signal: AbortSignal.timeout(8000) });
+      const xfo = (r.headers.get('x-frame-options') || '').toLowerCase();
+      const csp = (r.headers.get('content-security-policy') || '').toLowerCase();
+      const fa = (csp.match(/frame-ancestors([^;]*)/) || [])[1];
+      embutir = { permitido: r.ok && !xfo && !(fa && !/\*(\s|$)/.test(fa)), em: Date.now() };
+    } catch { embutir = { permitido: null, em: Date.now() - 864e5 + 6e5 }; }   // falhou: tenta de novo em 10 min
+  }
+  res.json({ permitido: embutir.permitido });
+}));
+
 // SPA
 app.use((req, res, next) => {
   if (req.method !== 'GET') return next();

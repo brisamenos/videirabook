@@ -523,7 +523,7 @@ label.ajuste-linha { cursor: pointer; border-bottom: 0; }
 .ref-biblia:hover { text-decoration-style: solid; }
 
 /* ───────── Bíblia */
-.versoes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: .8rem; }
+.versoes { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: .8rem; }
 .versao { text-align: left; border: 1.5px solid var(--linha); background: var(--papel); color: var(--tinta); border-radius: var(--r-md); padding: 12px 14px; cursor: pointer; }
 .versao b { display: block; font: 600 1.25rem var(--serif); }
 .versao span { font-size: .8rem; color: var(--suave); line-height: 1.3; display: block; }
@@ -538,13 +538,36 @@ label.ajuste-linha { cursor: pointer; border-bottom: 0; }
 .cap-cab { display: flex; align-items: center; gap: .8rem; margin-bottom: 1rem; }
 .cap-cab h3 small { font: 400 .9rem var(--sans); }
 .cap-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(52px, 1fr)); gap: 8px; }
-.cap-grade button { aspect-ratio: 1; border: 1px solid var(--linha-2); background: var(--papel); color: var(--tinta); border-radius: var(--r-sm); font: 600 1rem var(--sans); cursor: pointer; }
-.cap-grade button:hover { background: var(--vinho); color: #F5EEE4; border-color: var(--vinho); }
+.cap-grade a { display: grid; place-items: center; text-decoration: none; }
+.cap-grade button, .cap-grade a { aspect-ratio: 1; border: 1px solid var(--linha-2); background: var(--papel); color: var(--tinta); border-radius: var(--r-sm); font: 600 1rem var(--sans); cursor: pointer; }
+.cap-grade a:hover, .cap-grade button:hover { background: var(--vinho); color: #F5EEE4; border-color: var(--vinho); }
 @media (max-width: 720px) {
   .versoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .versoes .versao:first-child { grid-column: 1 / -1; }
+  .janela-biblia iframe { height: 70vh; }
   .busca-ref { flex-direction: column; align-items: stretch; }
   .livros { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ───────── Leitor da Bíblia */
+.leitor { max-width: 860px; margin: 0 auto; }
+.leitor-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: 1.2rem; }
+.leitor-cab h1 { font-size: clamp(2rem, 5vw, 2.8rem); margin-top: .3rem; }
+.leitor-nav { display: flex; gap: .5rem; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.leitor > .leitor-nav { margin-top: 1.6rem; }
+.leitor-corpo { margin-top: 1.4rem; min-height: 40vh; }
+.biblia-texto p { margin: 0 0 .55rem; }
+.biblia-texto sup { font: 700 .62em var(--sans); color: var(--ouro); margin-right: .35em; vertical-align: .45em; }
+.biblia-texto em { color: var(--suave); }
+.biblia-texto p.destaque { background: var(--ouro-claro); border-radius: 6px; padding: .2rem .5rem; margin-left: -.5rem; margin-right: -.5rem; }
+.biblia-credito { margin-top: 1.4rem; }
+.janela-biblia { border: 1px solid var(--linha); border-radius: var(--r-md); overflow: hidden; background: var(--papel); }
+.janela-cab { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: .6rem .9rem; border-bottom: 1px solid var(--linha-2); font-weight: 600; font-size: .92rem; }
+.janela-cab a { display: inline-flex; align-items: center; gap: .35rem; font-weight: 500; }
+.janela-cab a svg { width: 16px; height: 16px; }
+.janela-biblia iframe { display: block; width: 100%; height: 78vh; border: 0; background: #fff; }
+@media (max-width: 720px) { .leitor-cab { flex-direction: column; align-items: stretch; } .leitor-cab .leitor-nav { justify-content: flex-start; } }
+.bloqueio-biblia .acoes { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: 1rem; }
 
 /* ───────── Leitura noturna */
 html[data-tema="noite"] {
