@@ -621,3 +621,5 @@ html[data-tema="noite"] .tipo-escolha label { background: #141A16; }
 html[data-tema="noite"] .tabela tbody tr:hover { background: #202923; }
 .livros[hidden], .capitulos[hidden] { display: none; }
 @media print { html[data-tema="noite"] { --tinta: #1F241F; --suave: #5C635B; --papel: #fff; --fundo: #fff; } }
+
+.popup-versos { max-height: 55vh; overflow: auto; font-size: calc(1.15rem * var(--escala-leitura, 1)); }

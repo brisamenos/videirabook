@@ -322,9 +322,7 @@ window.VB = (function () {
       acceptNode: n => n.parentElement.closest('a, button, label, textarea, [contenteditable], .quiz-q') ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
     });
     const nos = []; while (andar.nextNode()) nos.push(andar.currentNode);
-    const versao = VB.versaoBiblia();
-    const nomeVersao = (VB.VERSOES.find(v => v[0] === versao) || [])[1];
-    nos.forEach(no => {
+        nos.forEach(no => {
       const t = no.nodeValue; reRef.lastIndex = 0;
       if (!reRef.test(t)) return;
       reRef.lastIndex = 0;
@@ -338,8 +336,10 @@ window.VB = (function () {
         frag.append(t.slice(ult, ini));
         const a = document.createElement('a');
         const verso = livro[3] === 1 && !m[4] ? Number(m[3]) : parseInt(m[4], 10) || 0;
+        const fim = (m[4] && /[-–](\d+)/.exec(m[4])) ? Number(/[-–](\d+)/.exec(m[4])[1]) : verso;
         a.className = 'ref-biblia'; a.href = VB.rotaBiblia(livro, cap, verso);
-        a.title = `Ler ${livro[0]} ${cap} (${nomeVersao})`;
+        a.dataset.livro = VB.LIVROS.indexOf(livro); a.dataset.cap = cap; a.dataset.ini = verso; a.dataset.fim = fim;
+        a.title = `Ler ${livro[0]} ${cap}${verso ? `.${verso}${fim > verso ? `-${fim}` : ''}` : ''}`;
         a.textContent = t.slice(ini, m.index + m[0].length);
         frag.append(a); ult = m.index + m[0].length;
       }
@@ -347,6 +347,35 @@ window.VB = (function () {
       frag.append(t.slice(ult)); no.replaceWith(frag);
     });
   };
+
+
+  // Clique numa referência: abre o trecho na Almeida, numa janela por cima da página
+  VB.popupVersiculo = async function (a) {
+    const livro = VB.LIVROS[Number(a.dataset.livro)]; const cap = Number(a.dataset.cap);
+    const ini = Number(a.dataset.ini) || 0; const fim = Math.max(ini, Number(a.dataset.fim) || ini);
+    const ref = `${livro[0]} ${cap}${ini ? `.${ini}${fim > ini ? `-${fim}` : ''}` : ''}`;
+    const m = VB.modal({
+      titulo: esc(ref),
+      corpo: '<div class="carregando" style="min-height:120px"></div>',
+      rodape: `<a class="btn sec" href="${VB.rotaBiblia(livro, cap, ini)}" data-fechar>Ler o capítulo inteiro</a><button class="btn" data-fechar>Fechar</button>`,
+    });
+    try {
+      const d = await VB.api(`/api/biblia/${a.dataset.livro}/${cap}`);
+      const lista = d.versos.map((t, i) => [i + 1, t]).filter(([n]) => !ini || (n >= ini && n <= fim));
+      const corpo = m.el.querySelector('.modal-corpo');
+      if (!corpo) return;
+      corpo.innerHTML = `<div class="leitura biblia-texto popup-versos">${lista.map(([n, t]) =>
+        `<p><sup>${n}</sup>${esc(t).replace(/\[([^\]]+)\]/g, '<em>$1</em>')}</p>`).join('')}</div>
+        <p class="pequeno muted" style="margin:.8rem 0 0">Almeida 1819 · domínio público</p>`;
+    } catch (e) {
+      const corpo = m.el.querySelector('.modal-corpo'); if (corpo) corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`;
+    }
+  };
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a.ref-biblia[data-livro]');
+    if (!a || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault(); VB.popupVersiculo(a);
+  });
 
   // ── Roteador (hash)
   VB.registrar = (padrao, papel, fn) => VB.rotas.push({ padrao, papel, fn });
