@@ -148,7 +148,8 @@ app.post('/api/logout', (req, res) => { res.clearCookie('vb_token'); res.json({ 
 
 app.get('/api/me', auth, h((req, res) => {
   const cfg = getConfig(); for (const k of Object.keys(cfg)) if (k[0] === '_') delete cfg[k];
-  res.json({ usuario: { ...req.user, ia: require('./sermoes').podeIA(req.user) }, config: cfg });
+  const SR = require('./sermoes');
+  res.json({ usuario: { ...req.user, ia: SR.podeIA(req.user), ia_motivo: SR.motivoIA(req.user) }, config: cfg });
 }));
 app.put('/api/me/senha', auth, h((req, res) => {
   const { atual, nova } = req.body || {};

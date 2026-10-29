@@ -875,3 +875,4 @@ html[data-tema="noite"] .chips-palavras.orig button { background: #2B2A1E; color
 #envio.envio-erro { border-color: var(--perigo); background: #FBEDEA; color: #7A2318; }
 #envio.envio-ok { border-color: var(--folha); }
 html[data-tema="noite"] #envio.envio-erro { background: #3A1E1A; color: #F2C4BC; }
+.ia-bloco.ia-off { background: var(--papel); border-style: dashed; }

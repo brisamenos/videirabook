@@ -28,6 +28,15 @@ function podeIA(u) {
   const r = db.prepare('SELECT pode_ia FROM usuarios WHERE id = ?').get(u.id);
   return !!(r && r.pode_ia);
 }
+// Por que a IA não está disponível para esta pessoa (null = está disponível)
+function motivoIA(u) {
+  const c = getConfig();
+  if (!u) return 'nao_liberado';
+  if (!c._openai_chave) return 'sem_chave';
+  if (c.ia_ativa !== '1') return 'desligada';
+  if (u.papel !== 'professor' && !podeIA(u)) return 'nao_liberado';
+  return null;
+}
 function uso(u) {
   const lim = Math.max(1, Number(getConfig().ia_limite_dia) || 15);
   const r = db.prepare('SELECT n FROM ia_uso WHERE usuario_id = ? AND dia = ?').get(u.id, hojeStr());
@@ -481,5 +490,6 @@ REGRAS: não invente versículos, datas, números ou costumes; cite outros texto
   P.delete('/frases/:id', h((req, res) => { db.prepare('DELETE FROM frases WHERE id = ?').run(Number(req.params.id)); res.json({ ok: true }); }));
 };
 module.exports.podeIA = podeIA;
+module.exports.motivoIA = motivoIA;
 module.exports.montarMaterial = montarMaterial;
 module.exports.sistema = sistema;

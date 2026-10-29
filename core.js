@@ -438,19 +438,32 @@ window.VB = (function () {
     rodar(false);
   };
 
+  // Quando a IA não está disponível, explica o motivo em vez de sumir
+  VB.avisoIA = function (caixa, oQue) {
+    if (!caixa || (VB.me && VB.me.ia)) return;
+    const prof = VB.me && VB.me.papel === 'professor'; const mot = VB.me && VB.me.ia_motivo;
+    const msg = prof
+      ? mot === 'sem_chave' ? `Para gerar ${oQue} com IA, salve a chave da OpenAI em <a href="#/p/ia">Sermões com IA</a>.`
+        : mot === 'desligada' ? `A IA está desligada. Ligue em <a href="#/p/ia">Sermões com IA</a> (opção “Ferramenta de sermões ligada”) para gerar ${oQue}.`
+          : `A IA não está disponível agora. Confira a configuração em <a href="#/p/ia">Sermões com IA</a>.`
+      : mot === 'nao_liberado' ? `${oQue[0].toUpperCase() + oQue.slice(1)} com IA é liberado pelo professor. Peça a ele para liberar o seu acesso.`
+        : `${oQue[0].toUpperCase() + oQue.slice(1)} com IA ainda não foi ativado pelo professor.`;
+    caixa.innerHTML = `<div class="ia-bloco ia-off"><div class="ia-cab"><span class="ia-selo">${VB.icone.faisca}IA</span></div><p class="pequeno" style="margin:0">${msg}</p></div>`;
+    caixa.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { const r = document.getElementById('modal-raiz'); if (r) r.innerHTML = ''; }));
+  };
   // Contexto: explicação da IA (quem tem acesso) + versículos ao redor + verbete do livro
   VB.contextoVerso = async function (l, cap, v, versao) {
     const livro = VB.LIVROS[l];
     const m = VB.modal({ titulo: `Contexto de ${esc(livro[0])} ${cap}.${v}`, largo: true, corpo: '<div id="ctx-ia"></div><div id="ctx-texto"><div class="carregando" style="min-height:140px"></div></div><div id="ctx-livro"></div>',
       rodape: `<a class="btn sec" href="${VB.rotaBiblia(livro, cap, v)}" data-fechar>Ler o capítulo</a><button class="btn" data-fechar>Fechar</button>` });
     const corpo = m.el.querySelector('.modal-corpo');
-    if (VB.me && VB.me.ia) VB.blocoIA(corpo.querySelector('#ctx-ia'), 'contexto', l, cap, v, versao);
+    if (VB.me && VB.me.ia) VB.blocoIA(corpo.querySelector('#ctx-ia'), 'contexto', l, cap, v, versao); else VB.avisoIA(corpo.querySelector('#ctx-ia'), 'o contexto');
     try {
       const d = await VB.api(`/api/biblia/${l}/${cap}?v=${versao}`);
       const ini = Math.max(1, v - 4), fim = Math.min(d.versos.length, v + 4);
       let titulo = ''; for (let n = v; n >= 1; n--) if (d.titulos && d.titulos[n]) { titulo = d.titulos[n]; break; }
       const caixaTexto = corpo.querySelector('#ctx-texto');
-      caixaTexto.innerHTML = `${VB.me && VB.me.ia ? '<h3 class="ctx-sub">Os versículos ao redor</h3>' : ''}<p class="pequeno muted" style="margin:0 0 .4rem">${titulo ? `Seção: <b>${esc(titulo)}</b> · ` : ''}${esc(livro[0])} ${cap}.${ini}-${fim} (${esc(d.sigla)})</p>
+      caixaTexto.innerHTML = `<h3 class="ctx-sub">Os versículos ao redor</h3><p class="pequeno muted" style="margin:0 0 .4rem">${titulo ? `Seção: <b>${esc(titulo)}</b> · ` : ''}${esc(livro[0])} ${cap}.${ini}-${fim} (${esc(d.sigla)})</p>
         <div class="leitura biblia-texto popup-versos" style="max-height:none">${VB.htmlVersos(d, { ini, fim, destaque: v })}</div>`;
       const dic = VB.DICIONARIOS[0];
       if (dic) {
@@ -492,14 +505,14 @@ window.VB = (function () {
   VB.concordanciaVerso = async function (l, cap, v, versao, texto) {
     const palavras = [...new Set((texto.match(/[\p{L}-]{4,}/gu) || []).filter(w => !PARADAS_V.has(VB.normalizar(w))).map(w => w.toLowerCase()))].slice(0, 14);
     const m = VB.modal({ titulo: `Concordância · ${esc(VB.LIVROS[l][0])} ${cap}.${v}`, largo: !!(VB.me && VB.me.ia), corpo: `<div id="conc-ia"></div>
-      <h3 class="ctx-sub" style="${VB.me && VB.me.ia ? '' : 'border:0;padding-top:0;margin-top:0'}">Palavras do versículo</h3>
+      <h3 class="ctx-sub">Palavras do versículo</h3>
       <p class="muted pequeno" style="margin-top:0">Toque numa palavra para ver todos os versículos em que ela aparece, ou escreva uma expressão.</p>
       <div class="chips-palavras">${palavras.map(w => `<a href="#/concordancia/${versao}/${encodeURIComponent(w)}" data-fechar>${esc(w)}</a>`).join('')}</div>
       <form id="f-conc-v" style="display:flex;gap:8px;margin-top:14px"><input class="input" name="q" minlength="3" required placeholder="Ex.: fruto do Espírito" aria-label="Palavra ou expressão"><button class="btn" type="submit">Procurar</button></form>
       <div id="conc-orig"></div>`,
       rodape: '<button class="btn sec" data-fechar>Fechar</button>' });
     m.el.querySelector('#f-conc-v').addEventListener('submit', e => { e.preventDefault(); const q = e.target.q.value.trim(); if (q.length < 3) return; m.fechar(); location.hash = `#/concordancia/${versao}/${encodeURIComponent(q)}`; });
-    if (VB.me && VB.me.ia) VB.blocoIA(m.el.querySelector('#conc-ia'), 'concordancia', l, cap, v, versao);
+    if (VB.me && VB.me.ia) VB.blocoIA(m.el.querySelector('#conc-ia'), 'concordancia', l, cap, v, versao); else VB.avisoIA(m.el.querySelector('#conc-ia'), 'a concordância');
     try {
       const o = await VB.api(`/api/original/${l}/${cap}/${v}`);
       const vistos = new Set();
