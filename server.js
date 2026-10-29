@@ -31,10 +31,28 @@ const ESTATICOS = {
   '/fonts/newsreader-latin-opsz-normal.woff2': 'newsreader-latin-opsz-normal.woff2',
   '/fonts/newsreader-latin-opsz-italic.woff2': 'newsreader-latin-opsz-italic.woff2',
   '/fonts/figtree-latin-wght-normal.woff2': 'figtree-latin-wght-normal.woff2',
+  '/manifest.webmanifest': 'manifest.webmanifest',
+  '/icon-192.png': 'icon-192.png',
+  '/icon-512.png': 'icon-512.png',
+  '/icon-maskable-512.png': 'icon-maskable-512.png',
+  '/apple-touch-icon.png': 'apple-touch-icon.png',
 };
 for (const [url, arq] of Object.entries(ESTATICOS)) {
   app.get(url, (req, res) => res.sendFile(path.join(__dirname, arq), { maxAge: 0, lastModified: true }));
 }
+// Aplicativo (instalação no celular / APK Android)
+app.get('/sw.js', (req, res) => {
+  res.set({ 'Cache-Control': 'no-cache', 'Service-Worker-Allowed': '/' });
+  res.sendFile(path.join(__dirname, 'sw.js'));
+});
+// Vínculo do APK com o site (tira a barra do navegador no app Android).
+// Preencha ANDROID_PACKAGE e ANDROID_SHA256 no EasyPanel com os dados que o PWABuilder entregar.
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const pacote = process.env.ANDROID_PACKAGE; const digitais = (process.env.ANDROID_SHA256 || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!pacote || !digitais.length) return res.json([]);
+  res.json([{ relation: ['delegate_permission/common.handle_all_urls'],
+    target: { namespace: 'android_app', package_name: pacote, sha256_cert_fingerprints: digitais } }]);
+});
 
 // ── Upload
 const storage = multer.diskStorage({
@@ -674,19 +692,29 @@ P.delete('/avisos/:id', h((req, res) => { db.prepare('DELETE FROM avisos WHERE i
 
 app.use('/api/admin', P);
 
-// ── Bíblia dentro do app (Almeida, domínio público) — texto carregado só quando alguém abre
-let BIBLIA = null;
-function biblia() {
-  if (!BIBLIA) BIBLIA = JSON.parse(fs.readFileSync(path.join(__dirname, 'biblia.json'), 'utf8'));
-  return BIBLIA;
+// ── Bíblias dentro do app — cada versão é carregada só quando alguém abre pela primeira vez
+const ARQ_BIBLIA = { alm: 'biblia.json', ara: 'biblia-ara.json', acf: 'biblia-acf.json', nvi: 'biblia-nvi.json', nvt: 'biblia-nvt.json', kjf: 'biblia-kjf.json' };
+const BIBLIAS = {};
+function biblia(cod) {
+  if (!ARQ_BIBLIA[cod]) cod = 'alm';
+  if (!BIBLIAS[cod]) {
+    // fica em modulos/biblias/; se não achar lá, procura na pasta principal (instalações antigas)
+    const arq = [path.join(__dirname, 'modulos', 'biblias', ARQ_BIBLIA[cod]), path.join(__dirname, ARQ_BIBLIA[cod])].find(f => fs.existsSync(f));
+    if (!arq) return cod === 'alm' ? null : biblia('alm');
+    BIBLIAS[cod] = JSON.parse(fs.readFileSync(arq, 'utf8'));
+  }
+  return BIBLIAS[cod];
 }
 app.get('/api/biblia/:livro/:cap', auth, h((req, res) => {
-  const b = biblia();
-  const livro = b.livros[Number(req.params.livro)];
-  const versos = livro && livro[Number(req.params.cap) - 1];
+  const b = biblia(String(req.query.v || 'alm'));
+  const n = Number(req.params.livro), cap = Number(req.params.cap);
+  const livro = b && b.livros[n];
+  const versos = livro && livro[cap - 1];
   if (!versos) return res.status(404).json({ erro: 'Capítulo não encontrado.' });
+  const titulos = {};
+  if (b.titulos) versos.forEach((_, i) => { const t = b.titulos[`${n}.${cap}.${i + 1}`]; if (t) titulos[i + 1] = t; });
   res.set('Cache-Control', 'private, max-age=86400');
-  res.json({ versao: b.versao, licenca: b.licenca, versos });
+  res.json({ versao: b.versao, sigla: b.sigla || 'Almeida', licenca: b.licenca, versos, titulos });
 }));
 
 // O site Bíblia Online deixa ser aberto dentro de outra página? (verificado 1x por dia)

@@ -438,7 +438,7 @@
       <div class="painel">${lista.length ? lista.map(avisoHtml).join('') : '<p class="muted" style="margin:0">Nenhum aviso por enquanto.</p>'}</div></div>`;
   });
 
-  // ── Bíblia: Almeida lida dentro do app; NVT, ARA, ARC e NVI numa janela do Bíblia Online dentro do app
+  // ── Bíblia: ARA, ACF, NVI, NVT, KJF e Almeida 1819 lidas dentro do app; ARC numa janela do Bíblia Online
   const nomeVersao = c => (VB.VERSOES.find(v => v[0] === c) || [])[1] || '';
   const livroPorSlug = slug => VB.LIVROS.find(l => l[2] === slug);
   let embutirOk;   // o site Bíblia Online pode ser aberto dentro do app?
@@ -447,8 +447,7 @@
     return embutirOk !== false;
   };
   const urlExterna = (l, cap) => {
-    const v = VB.versaoBiblia(); const c = VB.pref.get('comparar', '');
-    return VB.urlBiblia(l, cap, c && c !== v && c !== 'alm' ? `${v}+${c}` : v);
+    return VB.urlBiblia(l, cap, VB.versaoBiblia());
   };
   const chipsVersao = () => `<div class="versoes" role="radiogroup" aria-label="Versão da Bíblia">
     ${VB.VERSOES.map(v => `<button type="button" role="radio" class="versao" aria-checked="${v[0] === VB.versaoBiblia()}" data-versao="${v[0]}"><b>${v[1]}</b><span>${v[2]}</span></button>`).join('')}</div>`;
@@ -466,8 +465,8 @@
     $('#conteudo').innerHTML = `<div class="estreita biblia">
       <div class="saudacao"><div><h1>Bíblia</h1><p>Escolha a versão, o livro e o capítulo para ler aqui mesmo.</p></div></div>
       <section class="painel"><h3>Versão</h3>${chipsVersao()}
-        <label class="campo" id="campo-comparar" style="margin:1rem 0 0"><span>Comparar com outra versão (lado a lado)</span>
-          <select class="input" id="comparar"><option value="">Não comparar</option>${VB.VERSOES.slice(1).map(v => `<option value="${v[0]}">${v[1]} — ${v[2]}</option>`).join('')}</select></label>
+        <label class="campo" id="campo-comparar" style="margin:1rem 0 0"><span>Comparar com outra versão (versículo por versículo)</span>
+          <select class="input" id="comparar"><option value="">Não comparar</option>${VB.VERSOES.filter(v => v[3]).map(v => `<option value="${v[0]}">${v[1]} — ${v[2]}</option>`).join('')}</select></label>
       </section>
       <section class="painel" style="margin-top:16px">
         <form id="busca-ref" class="busca-ref" autocomplete="off">
@@ -485,9 +484,9 @@
         <div id="livros" class="livros"></div>
         <div id="capitulos" class="capitulos" hidden></div>
       </section>
-      <p class="pequeno muted" style="margin-top:14px">A Almeida 1819 é de domínio público e fica guardada no app. NVT, ARA, ARC e NVI têm direitos autorais das editoras: elas abrem numa janela do site Bíblia Online, que tem licença para publicá-las, sem sair do app.</p>
+      <p class="pequeno muted" style="margin-top:14px">ARA, ACF, NVI, NVT, KJF e Almeida 1819 ficam guardadas no app. A ARC abre numa janela do site Bíblia Online, sem sair do app.</p>
     </div>`;
-    const atualizarComparar = () => { $('#campo-comparar').hidden = VB.versaoBiblia() === 'alm'; $('#comparar').value = VB.pref.get('comparar', ''); };
+    const atualizarComparar = () => { $('#campo-comparar').hidden = !VB.versaoInterna(VB.versaoBiblia()); $('#comparar').value = VB.pref.get('comparar', ''); };
     const desenharLivros = () => {
       $$('.abas-testamento button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.test === testamento)));
       const lista = testamento === 'at' ? VB.LIVROS.slice(0, 39) : VB.LIVROS.slice(39);
@@ -541,12 +540,17 @@
     </div>`;
     const desenhar = async () => {
       const v = VB.versaoBiblia(); const corpo = $('#leitor-corpo');
-      if (v === 'alm') {
+      if (VB.versaoInterna(v)) {
         corpo.innerHTML = '<div class="carregando"></div>';
-        let d; try { d = await VB.api(`/api/biblia/${idx}/${cap}`); } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
-        corpo.innerHTML = `<div class="leitura biblia-texto">${d.versos.map((t, i) =>
-          `<p id="v${i + 1}" class="${verso && i + 1 === verso ? 'destaque' : ''}"><sup>${i + 1}</sup>${esc(t).replace(/\[([^\]]+)\]/g, '<em>$1</em>')}</p>`).join('')}</div>
-          <p class="pequeno muted biblia-credito">${esc(d.versao)} — ${esc(d.licenca)}</p>`;
+        const c = VB.pref.get('comparar', '');
+        const compara = c && c !== v && VB.versaoInterna(c) ? c : '';
+        let d, comp = null;
+        try {
+          [d, comp] = await Promise.all([VB.api(`/api/biblia/${idx}/${cap}?v=${v}`), compara ? VB.api(`/api/biblia/${idx}/${cap}?v=${compara}`) : null]);
+        } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
+        if (VB.versaoBiblia() !== v) return;   // trocou de versão enquanto carregava
+        corpo.innerHTML = `<div class="leitura biblia-texto${comp ? ' com-comparacao' : ''}">${VB.htmlVersos(d, { destaque: verso, comp })}</div>
+          <p class="pequeno muted biblia-credito">${esc(d.versao)} — ${esc(d.licenca)}${comp ? `<br>${esc(comp.versao)} — ${esc(comp.licenca)}` : ''}</p>`;
         if (verso) { const alvo = $(`#v${verso}`); if (alvo) setTimeout(() => alvo.scrollIntoView({ block: 'center' }), 50); }
         return;
       }
@@ -557,13 +561,13 @@
         corpo.innerHTML = `<div class="janela-biblia">
           <div class="janela-cab"><span>${esc(titulo)}${verso ? ` · versículo ${verso}` : ''}</span><a href="${esc(url)}" target="_blank" rel="noopener">${icone.externo}Abrir em tela cheia</a></div>
           <iframe src="${esc(url)}" title="${esc(titulo)}" loading="lazy" referrerpolicy="no-referrer"></iframe></div>
-          <p class="pequeno muted biblia-credito">Texto da ${esc(nomeVersao(v))} exibido pelo site Bíblia Online. Se a janela ficar em branco, use “Abrir em tela cheia” ou leia na Almeida.</p>`;
+          <p class="pequeno muted biblia-credito">Texto da ${esc(nomeVersao(v))} exibido pelo site Bíblia Online. Se a janela ficar em branco, use “Abrir em tela cheia” ou escolha outra versão.</p>`;
       } else {
         corpo.innerHTML = `<div class="painel bloqueio-biblia"><h3>A ${esc(nomeVersao(v))} não pode ser exibida aqui dentro</h3>
           <p class="muted">O site que publica essa versão não permite ser aberto dentro de outros apps. Você pode lê-la no site ou ler este capítulo na Almeida aqui no app.</p>
           <div class="acoes"><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${icone.externo}Ler a ${esc(nomeVersao(v))} no site</a>
-          <button class="btn sec" type="button" id="ler-alm">Ler na Almeida aqui</button></div></div>`;
-        $('#ler-alm').addEventListener('click', () => { VB.pref.set('versao', 'alm'); $$('.versao').forEach(x => x.setAttribute('aria-checked', String(x.dataset.versao === 'alm'))); desenhar(); });
+          <button class="btn sec" type="button" id="ler-alm">Ler na ARA aqui</button></div></div>`;
+        $('#ler-alm').addEventListener('click', () => { VB.pref.set('versao', 'ara'); $$('.versao').forEach(x => x.setAttribute('aria-checked', String(x.dataset.versao === 'ara'))); desenhar(); });
       }
     };
     ligarChips(desenhar);
