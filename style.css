@@ -639,3 +639,161 @@ html[data-tema="noite"] .tabela tbody tr:hover { background: #202923; }
 .etiqueta.ok { background: var(--vinho-claro); color: var(--vinho-2); }
 html[data-tema="noite"] .etiqueta.nova { background: #4A3B1F; color: #EDD29A; }
 html[data-tema="noite"] .etiqueta.ok { background: #24402F; color: #BFD8B0; }
+
+/* Texto bíblico: epígrafes, parágrafos, poesia, palavras de Jesus, notas */
+.biblia-texto .epigrafe { font: italic 400 .9em var(--serif); color: var(--suave); margin: 0 0 1rem; padding: .1rem 0 .1rem .9rem; border-left: 2px solid var(--ouro); line-height: 1.5; }
+.biblia-texto p.fim-par { margin-bottom: 1.15rem; }
+.biblia-texto p[class*="recuo-"] { padding-left: 1.4em; }
+.biblia-texto p.recuo-2 { padding-left: 2.4em; }
+.biblia-texto p.recuo-3, .biblia-texto p.recuo-4 { padding-left: 3.2em; }
+.biblia-texto .jesus { color: #9B2C24; }
+.biblia-texto .citacao-at { font-style: italic; }
+.biblia-texto button.nota { border: 0; background: none; padding: 0 .15em; margin: 0 .1em; font: 700 .7em var(--sans); color: var(--ouro); vertical-align: .4em; cursor: pointer; line-height: 1; }
+.biblia-texto button.nota[aria-expanded="true"] { color: var(--vinho-2); }
+.biblia-texto .nota-texto { display: block; margin: .35rem 0 .5rem; padding: .55rem .8rem; border-radius: 10px; background: var(--ouro-claro); font: 400 .82em/1.5 var(--sans); color: var(--tinta); }
+html[data-tema="noite"] .biblia-texto .jesus { color: #E59A8E; }
+html[data-tema="noite"] .biblia-texto .nota-texto { background: #2B2A1E; color: #E8E2D0; }
+
+/* Abas da Bíblia, dicionário e concordância */
+.abas-biblia { display: inline-flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--vinho-claro); margin: -.6rem 0 1.4rem; flex-wrap: wrap; }
+.abas-biblia a { padding: 8px 18px; border-radius: 999px; font-weight: 600; font-size: .92rem; color: var(--vinho-2); text-decoration: none; }
+.abas-biblia a[aria-current="page"] { background: var(--papel); color: var(--vinho); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.dic-pagina { max-width: 1100px; margin: 0 auto; }
+.dic-grade { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.dic-lado { position: sticky; top: 84px; padding: 16px; }
+.dic-lista { margin-top: .7rem; max-height: 62vh; overflow: auto; display: flex; flex-direction: column; }
+.dic-lista a { padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--tinta); font-size: .95rem; }
+.dic-lista a:hover { background: var(--vinho-claro); }
+.dic-lista a[aria-current="true"] { background: var(--vinho-claro); color: var(--vinho); font-weight: 600; }
+.dic-verbete { min-width: 0; padding: 26px 30px; }
+.dic-titulo { font-size: 2rem; margin: 0 0 1rem; }
+.verbete p { margin: 0 0 .9rem; }
+.verbete img { max-width: 100%; height: auto; border-radius: 8px; margin: .6rem 0; }
+.verbete table { border-collapse: collapse; width: 100%; font-size: .9em; display: block; overflow-x: auto; }
+.verbete td, .verbete th { border: 1px solid var(--linha); padding: 4px 8px; }
+.verbete a.ref-verbete { color: var(--vinho-2); font-weight: 600; }
+.dic-voltar { display: none; margin-bottom: .8rem; }
+.conc-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.conc-livro { margin-bottom: 12px; padding: 18px 22px; }
+.conc-livro h3 { margin: 0 0 .6rem; font-size: 1.2rem; }
+.conc-item { margin: 0 0 .55rem; font-family: var(--serif); font-size: calc(1.04rem * var(--escala-leitura, 1)); line-height: 1.55; }
+.conc-item a.ref-biblia { font: 700 .78rem var(--sans); color: var(--ouro); margin-right: .35rem; text-decoration: none; white-space: nowrap; }
+.conc-item mark { background: var(--ouro-claro); color: inherit; border-radius: 3px; padding: 0 2px; }
+html[data-tema="noite"] .conc-item mark { background: #4A3B1F; }
+html[data-tema="noite"] .abas-biblia a[aria-current="page"] { background: #2B4A37; color: #E6EFE0; }
+@media (max-width: 900px) {
+  .dic-grade { grid-template-columns: 1fr; }
+  .dic-lado { position: static; }
+  .dic-pagina.com-verbete .dic-lado { display: none; }
+  .dic-pagina:not(.com-verbete) .dic-verbete { display: none; }
+  .dic-voltar { display: inline-flex; }
+  .dic-verbete { padding: 20px 18px; }
+}
+
+/* Professor: IA */
+.ia-grade { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 16px; align-items: start; }
+.lista-ia { display: flex; flex-direction: column; gap: 4px; max-height: 420px; overflow: auto; }
+.linha-ia { padding: 8px 6px; border-radius: 8px; }
+.linha-ia:hover { background: var(--vinho-claro); }
+@media (max-width: 900px) { .ia-grade { grid-template-columns: 1fr; } }
+
+/* Sermões */
+.lista-sermoes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.cartao-sermao { display: block; text-decoration: none; color: inherit; transition: transform .15s, box-shadow .15s; }
+.cartao-sermao:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(30,59,44,.12); }
+.cartao-sermao h3 { margin: .6rem 0 .3rem; font-size: 1.25rem; line-height: 1.2; }
+.cartao-sermao p { margin: 0; }
+.form-sermao fieldset { border: 0; padding: 0; margin: 0 0 1rem; }
+.form-sermao legend { font-weight: 600; font-size: .9rem; margin-bottom: .5rem; padding: 0; }
+.tipos-sermao { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.tipo-sermao { position: relative; border: 1.5px solid var(--linha); border-radius: var(--r-md); padding: 14px; cursor: pointer; background: var(--papel); transition: border-color .15s, background .15s; }
+.tipo-sermao input { position: absolute; opacity: 0; pointer-events: none; }
+.tipo-sermao b { display: block; font: 600 1.15rem var(--serif); }
+.tipo-sermao span { display: block; font-size: .82rem; color: var(--suave); margin-top: .25rem; line-height: 1.35; }
+.tipo-sermao.ativo { border-color: var(--vinho-2); background: var(--vinho-claro); }
+.tipo-sermao:has(input:focus-visible) { outline: 2px solid var(--vinho-2); outline-offset: 2px; }
+.opcao { display: inline-flex; gap: 8px; align-items: center; font-size: .95rem; cursor: pointer; }
+.opcao input { accent-color: var(--vinho-2); width: 18px; height: 18px; }
+@media (max-width: 760px) { .tipos-sermao { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.sermao-pagina { max-width: 1240px; margin: 0 auto; }
+.sermao-barra { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.sermao-barra h1 { font-size: clamp(1.6rem, 3vw, 2.3rem); line-height: 1.1; }
+.acoes-sermao { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.sermao-grade { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+.doc-sermao { padding: 34px 42px; min-height: 50vh; font-size: calc(1.08rem * var(--escala-leitura, 1)); }
+.doc-sermao h1 { font-size: 2em; line-height: 1.1; margin: 0 0 .6rem; }
+.doc-sermao h2 { font-size: 1.35em; margin: 1.6rem 0 .5rem; color: var(--vinho-2); }
+.doc-sermao h3, .doc-sermao h4 { font-size: 1.1em; margin: 1.1rem 0 .4rem; }
+.doc-sermao p { margin: 0 0 .8rem; }
+.doc-sermao p.ponto { font-weight: 600; margin-top: 1.1rem; }
+.doc-sermao .romano { color: var(--ouro); font-family: var(--serif); margin-right: .2rem; }
+.doc-sermao ul, .doc-sermao ol { margin: 0 0 .9rem; padding-left: 1.3rem; }
+.doc-sermao li { margin-bottom: .35rem; }
+.doc-sermao li.sub { margin-left: 1.2rem; list-style: circle; }
+.doc-sermao blockquote, .chat-sermao blockquote { margin: 1rem 0; padding: .6rem 1rem; border-left: 3px solid var(--ouro); background: var(--ouro-claro); border-radius: 0 10px 10px 0; font-style: italic; }
+.doc-sermao hr { border: 0; border-top: 1px solid var(--linha); margin: 1.4rem 0; }
+.cursor-ia { display: inline-block; width: .55em; height: 1.05em; vertical-align: -.15em; background: var(--ouro); margin-left: 2px; animation: piscar 1s steps(2) infinite; border-radius: 2px; }
+@keyframes piscar { 50% { opacity: 0; } }
+.gerando { display: grid; place-items: center; text-align: center; min-height: 40vh; color: var(--suave); }
+.faisca-anim svg { width: 46px; height: 46px; color: var(--ouro); animation: girar-ia 2.4s linear infinite; }
+@keyframes girar-ia { to { transform: rotate(360deg); } }
+.fontes-sermao { margin-top: 12px; font-size: .92rem; }
+.fontes-sermao summary { cursor: pointer; font-weight: 600; }
+.fontes-sermao p { margin: .6rem 0 0; }
+.chat-sermao { position: sticky; top: 84px; display: flex; flex-direction: column; max-height: calc(100vh - 110px); padding: 18px; }
+.chat-sermao h3 { margin: 0; }
+.chat-msgs { flex: 1; overflow: auto; display: flex; flex-direction: column; gap: 8px; min-height: 120px; padding-right: 4px; }
+.msg { padding: 10px 13px; border-radius: 14px; font-size: .93rem; line-height: 1.5; max-width: 92%; }
+.msg p { margin: 0 0 .4rem; } .msg p:last-child { margin: 0; }
+.msg.eu { align-self: flex-end; background: var(--vinho-2); color: #fff; border-bottom-right-radius: 4px; }
+.msg.ia { align-self: flex-start; background: var(--vinho-claro); border-bottom-left-radius: 4px; }
+.chips-chat { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0; }
+.chips-chat button { border: 1px solid var(--linha); background: var(--papel); color: var(--tinta); border-radius: 999px; padding: 5px 11px; font: 500 .8rem var(--sans); cursor: pointer; }
+.chips-chat button:hover { border-color: var(--vinho-2); }
+.f-chat { display: flex; gap: 8px; align-items: flex-end; }
+.f-chat textarea { resize: vertical; min-height: 46px; }
+.abas-sermao { display: none; }
+body.ia-trabalhando .chips-chat button, body.ia-trabalhando #enviar-chat { opacity: .5; pointer-events: none; }
+@media (max-width: 980px) {
+  .sermao-grade { grid-template-columns: 1fr; }
+  .abas-sermao { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--vinho-claro); margin-bottom: 12px; }
+  .abas-sermao button { flex: 1; border: 0; background: none; padding: 9px; border-radius: 999px; font: 600 .92rem var(--sans); color: var(--vinho-2); cursor: pointer; }
+  .abas-sermao button[aria-selected="true"] { background: var(--papel); color: var(--vinho); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .sermao-grade[data-aba="doc"] .chat-sermao { display: none; }
+  .sermao-grade[data-aba="chat"] > div:first-child { display: none; }
+  .chat-sermao { position: static; max-height: none; min-height: 60vh; }
+  .doc-sermao { padding: 22px 18px; }
+}
+html[data-tema="noite"] .msg.ia { background: #24402F; }
+html[data-tema="noite"] .doc-sermao blockquote, html[data-tema="noite"] .chat-sermao blockquote { background: #2B2A1E; }
+
+/* Modo púlpito */
+.pulpito { position: fixed; inset: 0; z-index: 200; background: #0F1A13; color: #F3EADA; overflow: auto; padding: 0 max(20px, env(safe-area-inset-right)) 80px max(20px, env(safe-area-inset-left)); }
+.pulpito-barra { position: sticky; top: 0; display: flex; justify-content: flex-end; gap: 8px; padding: max(12px, env(safe-area-inset-top)) 0 12px; background: linear-gradient(#0F1A13 70%, transparent); }
+.pulpito-barra button { border: 1px solid rgba(243,234,218,.3); background: rgba(243,234,218,.06); color: #F3EADA; border-radius: 999px; padding: 10px 18px; font: 600 1rem var(--sans); cursor: pointer; }
+.pulpito-texto { max-width: 900px; margin: 0 auto; line-height: 1.6; }
+.pulpito-texto h1 { font-size: 2em; line-height: 1.1; color: #EDD29A; }
+.pulpito-texto h2 { color: #A9C98F; margin-top: 1.8em; font-size: 1.3em; }
+.pulpito-texto .romano { color: #EDD29A; }
+.pulpito-texto a.ref-biblia { color: #EDD29A; }
+.pulpito-texto blockquote { border-left: 3px solid #C9A15A; padding-left: 1rem; margin-left: 0; font-style: italic; }
+
+/* Impressão do sermão */
+@media print {
+  body.imprimindo-sermao .topo, body.imprimindo-sermao .tabbar, body.imprimindo-sermao .migalha, body.imprimindo-sermao .acoes-sermao,
+  body.imprimindo-sermao .chat-sermao, body.imprimindo-sermao .abas-sermao, body.imprimindo-sermao .fontes-sermao, body.imprimindo-sermao #editor { display: none !important; }
+  body.imprimindo-sermao .sermao-grade { display: block !important; }
+  body.imprimindo-sermao .sermao-grade > div:first-child { display: block !important; }
+  body.imprimindo-sermao .doc-sermao { border: 0 !important; padding: 0 !important; box-shadow: none !important; }
+}
+.campo[hidden] { display: none; }
+.opcoes { display: flex; gap: 8px 18px; flex-wrap: wrap; min-height: 46px; align-items: center; }
+.campo .opcao { display: inline-flex; flex-direction: row; gap: 8px; align-items: center; margin: 0; font-weight: 500; border: 0; padding: 0; background: none; }
+@media (max-width: 860px) { .tabbar { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); } .tabbar a { font-size: .68rem; } }
+html[data-tema="noite"] .abas-sermao { background: #1F3328; }
+html[data-tema="noite"] .abas-sermao button { color: #BFD8B0; }
+html[data-tema="noite"] .abas-sermao button[aria-selected="true"] { background: #2B4A37; color: #F0F5EC; }
+html[data-tema="noite"] .abas-biblia { background: #1F3328; }
+html[data-tema="noite"] .abas-biblia a { color: #BFD8B0; }
+html[data-tema="noite"] .tipo-sermao.ativo { background: #24402F; border-color: #5E8A55; }

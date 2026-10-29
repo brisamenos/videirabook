@@ -8,6 +8,8 @@
       ['cursos', '#/p/cursos', 'Cursos e aulas', icone.livro],
       ['alunos', '#/p/alunos', 'Alunos', icone.pessoas],
       ['inscricoes', '#/p/inscricoes', 'Inscrições', icone.pessoa],
+      ['modulos', '#/p/modulos', 'Módulos bíblicos', icone.livro],
+      ['ia', '#/p/ia', 'Sermões com IA', icone.caneta],
       ['avisos', '#/p/avisos', 'Avisos', icone.sino],
       ['config', '#/p/config', 'Configurações', icone.engrenagem],
     ];
@@ -16,7 +18,7 @@
         <aside class="lateral" id="lateral">
           <a class="marca" href="#/p/painel"><img src="/img/logo.svg" alt="">VideiraBook</a>
           <nav aria-label="Professor">${links.map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}${l[2]}</a>`).join('')}</nav>
-          <nav aria-label="Visão do aluno"><a href="#/inicio">${icone.olho}Ver como aluno</a><a href="#/biblia">${icone.livro}Bíblia</a>
+          <nav aria-label="Visão do aluno"><a href="#/inicio">${icone.olho}Ver como aluno</a><a href="#/biblia">${icone.livro}Bíblia</a>${VB.me.ia ? `<a href="#/sermoes">${icone.caneta}Meus sermões</a>` : ''}
             <a href="#" id="btn-leitura-prof"><span class="aa-icone" aria-hidden="true">Aa</span>Leitura e modo noturno</a></nav>
           <div class="rodape"><div style="color:#fff;font-weight:600">${esc(VB.me.nome)}</div>
             <div style="margin:.15rem 0 .6rem">Professor · <a href="#/perfil">trocar senha</a></div>
@@ -173,6 +175,151 @@
     $('#busca').addEventListener('input', e => desenhar(e.target.value));
     $('#novo').addEventListener('click', () => formAluno(null, () => { location.hash = '#/p/alunos'; VB.rota(); }));
     if (novo) { history.replaceState(null, '', '#/p/alunos'); formAluno(null, () => VB.rota()); }
+  });
+
+  // ── Módulos bíblicos (MySword): importar, ordenar, padrão, ativar
+  const tamanho = b => b > 1048576 ? `${(b / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.round((b || 0) / 1024)} KB`;
+  VB.registrar(/^\/p\/modulos$/, 'professor', async () => {
+    carregando('modulos'); document.title = 'Módulos bíblicos · VideiraBook';
+    const { padrao, lista } = await VB.api('/api/admin/biblioteca');
+    const bloco = (tipo, titulo, vazio) => {
+      const itens = lista.filter(m => m.tipo === tipo);
+      return `<section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .8rem">${titulo}</h3>
+        ${itens.length ? `<div class="tabela-wrap" style="border:0"><table class="tabela"><thead><tr><th style="width:84px">Ordem</th><th>Módulo</th>${tipo === 'biblia' ? '<th>Padrão</th>' : ''}<th>Ativo</th><th></th></tr></thead><tbody>
+        ${itens.map((m, i) => `<tr${m.ativo ? '' : ' style="opacity:.55"'}>
+          <td><div class="acoes" style="justify-content:flex-start"><button class="icone-btn" data-mover="${m.cod}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Subir">${icone.cima}</button><button class="icone-btn" data-mover="${m.cod}" data-dir="1" ${i < itens.length - 1 ? '' : 'disabled'} aria-label="Descer">${icone.baixo}</button></div></td>
+          <td><strong>${esc(m.sigla)}</strong> — ${esc(m.titulo)}<br><small class="muted">${esc(m.creditos || 'sem créditos')} · ${m.formato === 'json' ? 'texto do app' : m.formato === 'mybible' ? 'MyBible' : 'MySword'} · ${tamanho(m.tamanho)}${m.embutido ? ' · vem com o app' : ''}${m.existe ? '' : ' · <span style="color:var(--perigo)">arquivo não encontrado</span>'}</small></td>
+          ${tipo === 'biblia' ? `<td><input type="radio" name="padrao" value="${m.cod}" ${m.cod === padrao ? 'checked' : ''} ${m.ativo ? '' : 'disabled'} aria-label="Versão padrão"></td>` : ''}
+          <td><label class="chave"><input type="checkbox" data-ativo="${m.cod}" ${m.ativo ? 'checked' : ''} aria-label="Ativo"></label></td>
+          <td><div class="acoes"><button class="icone-btn" data-editar="${m.cod}" title="Editar nome e créditos" aria-label="Editar">${icone.lapis}</button>
+            ${m.embutido ? '' : `<button class="icone-btn" data-excluir="${m.cod}" title="Remover" aria-label="Remover">${icone.lixo}</button>`}</div></td></tr>`).join('')}</tbody></table></div>`
+        : `<p class="muted" style="margin:0">${vazio}</p>`}</section>`;
+    };
+    $('#conteudo').innerHTML = `${cabecalho('Módulos bíblicos', 'Bíblias e dicionários no formato do MySword (.mybible), usados na leitura, na concordância e nos sermões.', `<button class="btn" id="importar">${icone.upload}Importar módulo</button>`)}
+      <input type="file" id="arq-modulo" accept=".mybible,.sqlite3,.SQLite3" hidden>
+      <div id="envio" hidden class="painel" style="margin-bottom:16px"><p style="margin:0 0 .5rem" id="envio-txt">Enviando…</p>${VB.barra(0)}</div>
+      ${bloco('biblia', 'Bíblias', 'Nenhuma Bíblia instalada.')}
+      ${bloco('dicionario', 'Dicionários', 'Nenhum dicionário ainda. Importe um arquivo .dct.mybible do MySword (por exemplo, o Dicionário Wycliffe).')}
+      <p class="pequeno muted">Aceita Bíblias (<b>.bbl.mybible</b>) e dicionários (<b>.dct.mybible</b>) do MySword, e Bíblias do MyBible. Títulos, epígrafes dos Salmos, palavras de Jesus em vermelho e notas de rodapé aparecem quando o módulo traz essas marcações.</p>`;
+    $('#importar').addEventListener('click', () => $('#arq-modulo').click());
+    $('#arq-modulo').addEventListener('change', e => {
+      const arq = e.target.files[0]; if (!arq) return;
+      const fd = new FormData(); fd.append('arquivo', arq);
+      const caixa = $('#envio'); caixa.hidden = false; $('#envio-txt').textContent = `Enviando ${arq.name}…`;
+      const barra = caixa.querySelector('.barra i, .barra span, .barra > *');
+      const x = new XMLHttpRequest(); x.open('POST', '/api/admin/biblioteca');
+      x.upload.onprogress = ev => { if (ev.lengthComputable && barra) barra.style.width = `${Math.round(ev.loaded / ev.total * 100)}%`; if (ev.loaded === ev.total) $('#envio-txt').textContent = 'Conferindo o módulo…'; };
+      x.onload = async () => {
+        let d = {}; try { d = JSON.parse(x.responseText); } catch {}
+        if (x.status >= 400) { caixa.hidden = true; VB.toast(d.erro || 'Não foi possível importar o módulo.', true); e.target.value = ''; return; }
+        VB.toast(`${d.tipo === 'biblia' ? 'Bíblia importada' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
+        await VB.carregarBiblioteca(); VB.rota();
+      };
+      x.onerror = () => { caixa.hidden = true; VB.toast('A conexão caiu durante o envio. Tente de novo.', true); };
+      x.send(fd);
+    });
+    const recarregar = async () => { await VB.carregarBiblioteca(); VB.rota(); };
+    $$('[data-mover]').forEach(b => b.addEventListener('click', async () => { await VB.api(`/api/admin/biblioteca/${b.dataset.mover}/mover`, { method: 'POST', body: { dir: Number(b.dataset.dir) } }); recarregar(); }));
+    $$('[data-ativo]').forEach(c => c.addEventListener('change', async () => {
+      try { await VB.api(`/api/admin/biblioteca/${c.dataset.ativo}`, { method: 'PUT', body: { ativo: c.checked } }); recarregar(); } catch (er) { VB.erro(er); }
+    }));
+    $$('input[name="padrao"]').forEach(r => r.addEventListener('change', async () => {
+      await VB.api('/api/admin/config', { method: 'PUT', body: { biblia_padrao: r.value } }); VB.toast('Versão padrão alterada'); recarregar();
+    }));
+    $$('[data-editar]').forEach(b => b.addEventListener('click', () => {
+      const m = lista.find(x => x.cod === b.dataset.editar);
+      const md = VB.modal({ titulo: 'Editar módulo', corpo: `<form id="f-mod">
+          <div class="linha-campos"><label class="campo"><span>Sigla</span><input class="input" name="sigla" maxlength="20" required value="${esc(m.sigla)}"></label>
+          <label class="campo"><span>Nome</span><input class="input" name="titulo" maxlength="120" required value="${esc(m.titulo)}"></label></div>
+          <label class="campo"><span>Créditos (aparece embaixo do texto)</span><input class="input" name="creditos" maxlength="200" value="${esc(m.creditos || '')}" placeholder="Ex.: © Sociedade Bíblica do Brasil"></label></form>`,
+        rodape: '<button class="btn sec" data-fechar>Cancelar</button><button class="btn" id="salvar-mod">Salvar</button>' });
+      md.el.querySelector('#salvar-mod').addEventListener('click', async () => {
+        const f = md.el.querySelector('#f-mod'); if (!f.reportValidity()) return;
+        try { await VB.api(`/api/admin/biblioteca/${m.cod}`, { method: 'PUT', body: { sigla: f.sigla.value, titulo: f.titulo.value, creditos: f.creditos.value } }); md.fechar(); VB.toast('Módulo atualizado'); recarregar(); }
+        catch (er) { VB.erro(er); }
+      });
+    }));
+    $$('[data-excluir]').forEach(b => b.addEventListener('click', async () => {
+      const m = lista.find(x => x.cod === b.dataset.excluir);
+      if (!(await VB.confirmar('Remover módulo', `Remover <strong>${esc(m.sigla)} — ${esc(m.titulo)}</strong> do app? O arquivo será apagado do servidor.`, 'Remover'))) return;
+      try { await VB.api(`/api/admin/biblioteca/${m.cod}`, { method: 'DELETE' }); VB.toast('Módulo removido'); recarregar(); } catch (er) { VB.erro(er); }
+    }));
+  });
+
+  // ── Sermões com IA: chave da OpenAI, modelo, quem pode usar e frases de homens de Deus
+  const MODELOS = [['gpt-6.1-sol', 'GPT-6.1 Sol — recomendado: ótimo texto, custo médio'], ['gpt-6-luna', 'GPT-6 Luna — mais econômico'], ['gpt-6-astra', 'GPT-6 Astra — o mais completo, custo maior']];
+  VB.registrar(/^\/p\/ia$/, 'professor', async () => {
+    carregando('ia'); document.title = 'Sermões com IA · VideiraBook';
+    const d = await VB.api('/api/admin/ia');
+    const outro = !MODELOS.some(m => m[0] === d.modelo);
+    $('#conteudo').innerHTML = `${cabecalho('Sermões com IA', 'Ferramenta para pregadores criarem sermões textuais, temáticos, históricos e expositivos, com texto bíblico dos módulos, dicionários e frases cadastradas.', `<a class="btn sec" href="#/sermoes">${icone.caneta}Abrir a ferramenta</a>`)}
+      <div class="ia-grade">
+      <section class="painel"><h3 style="margin-top:0">Conexão com a OpenAI</h3>
+        <form id="f-ia">
+          <label class="campo"><span>Chave da API${d.tem_chave ? ` <small class="muted">(salva, termina em …${esc(d.chave_fim)})</small>` : ''}</span>
+            <input class="input" name="chave" type="password" autocomplete="off" placeholder="${d.tem_chave ? 'Deixe em branco para manter a chave salva' : 'sk-...'}">
+            <small>Crie em platform.openai.com/api-keys. Ela fica guardada só no servidor e nunca aparece para os alunos. O uso é cobrado na sua conta da OpenAI.</small></label>
+          <label class="campo"><span>Modelo</span><select class="input" name="modelo_sel">${MODELOS.map(m => `<option value="${m[0]}"${m[0] === d.modelo ? ' selected' : ''}>${m[1]}</option>`).join('')}<option value="outro"${outro ? ' selected' : ''}>Outro (digitar o nome)</option></select></label>
+          <label class="campo" id="campo-modelo-outro" ${outro ? '' : 'hidden'}><span>Nome do modelo</span><input class="input" name="modelo_outro" value="${outro ? esc(d.modelo) : ''}" placeholder="ex.: gpt-6-sol"></label>
+          <label class="campo"><span>Limite de pedidos por pessoa, por dia</span><input class="input" name="limite" type="number" min="1" max="500" value="${d.limite}" style="max-width:140px"><small>Cada geração ou ajuste conta 1. O professor não tem limite. Hoje foram ${d.uso_hoje} pedido${d.uso_hoje === 1 ? '' : 's'}.</small></label>
+          <label class="chave" style="margin:.4rem 0 1rem"><input type="checkbox" name="ativa" ${d.ativa ? 'checked' : ''}>Ferramenta de sermões ligada</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" type="submit">Salvar</button><button class="btn sec" type="button" id="testar">Testar conexão</button>
+            ${d.tem_chave ? '<button class="btn sec" type="button" id="remover-chave">Remover chave</button>' : ''}</div>
+          <p class="pequeno" id="teste-res" style="margin:.8rem 0 0"></p>
+        </form></section>
+      <section class="painel"><h3 style="margin-top:0">Quem pode usar</h3>
+        <p class="muted pequeno" style="margin-top:0">Marque os alunos que poderão criar sermões. Você, professor, sempre tem acesso.</p>
+        <input class="input" id="busca-ia" placeholder="Buscar aluno" style="margin-bottom:.6rem" aria-label="Buscar aluno">
+        <div class="lista-ia" id="lista-ia">${d.usuarios.length ? d.usuarios.map(u => `<label class="chave linha-ia" data-nome="${esc(VB.normalizar(u.nome + ' ' + u.usuario))}"><input type="checkbox" data-ia="${u.id}" ${u.pode_ia ? 'checked' : ''}><span><strong>${esc(u.nome)}</strong> <small class="muted">${esc(u.usuario)}${u.ativo ? '' : ' · desativado'}</small></span></label>`).join('') : '<p class="muted">Nenhum aluno cadastrado.</p>'}</div>
+      </section></div>
+      <section class="painel" style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center"><div><h3 style="margin:0">Frases de homens de Deus</h3>
+          <p class="muted pequeno" style="margin:.3rem 0 0">A IA só pode citar frases desta lista, palavra por palavra. Confira a fonte antes de ativar uma frase nova.</p></div>
+          <button class="btn sec" id="nova-frase">${icone.mais}Nova frase</button></div>
+        <div class="tabela-wrap" style="margin-top:12px"><table class="tabela"><thead><tr><th>Frase</th><th class="col-opc">Fonte</th><th>Ativa</th><th></th></tr></thead><tbody>
+        ${d.frases.map(f => `<tr${f.ativo ? '' : ' style="opacity:.55"'}><td><span style="font-family:var(--serif)">“${esc(f.frase)}”</span><br><small class="muted">— ${esc(f.autor)}</small></td><td class="col-opc pequeno muted">${esc(f.fonte || '')}</td>
+          <td><label class="chave"><input type="checkbox" data-frase-ativa="${f.id}" ${f.ativo ? 'checked' : ''} aria-label="Ativa"></label></td>
+          <td><div class="acoes"><button class="icone-btn" data-frase-editar="${f.id}" aria-label="Editar">${icone.lapis}</button><button class="icone-btn" data-frase-excluir="${f.id}" aria-label="Excluir">${icone.lixo}</button></div></td></tr>`).join('')}
+        </tbody></table></div></section>`;
+    const f = $('#f-ia');
+    f.modelo_sel.addEventListener('change', () => { $('#campo-modelo-outro').hidden = f.modelo_sel.value !== 'outro'; });
+    const salvar = async (extra = {}) => {
+      const modelo = f.modelo_sel.value === 'outro' ? f.modelo_outro.value.trim() : f.modelo_sel.value;
+      await VB.api('/api/admin/ia', { method: 'PUT', body: { chave: f.chave.value.trim(), modelo, limite: Number(f.limite.value), ativa: f.ativa.checked, ...extra } });
+    };
+    f.addEventListener('submit', async e => { e.preventDefault(); try { await salvar(); VB.toast('Configuração salva'); await VB.carregarMe(); VB.rota(); } catch (er) { VB.erro(er); } });
+    $('#testar').addEventListener('click', async () => {
+      const r = $('#teste-res'); r.style.color = ''; r.textContent = 'Testando…';
+      try { if (f.chave.value.trim()) await salvar(); const t = await VB.api('/api/admin/ia/testar', { method: 'POST' }); r.style.color = 'var(--folha)'; r.textContent = `Conexão funcionando com o modelo ${t.modelo}.`; }
+      catch (er) { r.style.color = 'var(--perigo)'; r.textContent = er.message; }
+    });
+    if ($('#remover-chave')) $('#remover-chave').addEventListener('click', async () => {
+      if (!(await VB.confirmar('Remover chave', 'A ferramenta de sermões para de funcionar até você salvar uma nova chave.', 'Remover'))) return;
+      await VB.api('/api/admin/ia', { method: 'PUT', body: { remover_chave: true } }); VB.toast('Chave removida'); VB.rota();
+    });
+    $$('[data-ia]').forEach(c => c.addEventListener('change', async () => {
+      try { await VB.api(`/api/admin/ia/usuarios/${c.dataset.ia}`, { method: 'PUT', body: { pode_ia: c.checked } }); VB.toast(c.checked ? 'Acesso liberado' : 'Acesso retirado'); } catch (er) { VB.erro(er); c.checked = !c.checked; }
+    }));
+    $('#busca-ia').addEventListener('input', e => { const q = VB.normalizar(e.target.value); $$('.linha-ia').forEach(l => { l.hidden = !!q && !l.dataset.nome.includes(q); }); });
+    const formFrase = fr => {
+      const md = VB.modal({ titulo: fr ? 'Editar frase' : 'Nova frase', corpo: `<form id="f-frase">
+          <label class="campo"><span>Frase</span><textarea class="input" name="frase" rows="4" required maxlength="600">${esc(fr?.frase || '')}</textarea></label>
+          <div class="linha-campos"><label class="campo"><span>Autor</span><input class="input" name="autor" required maxlength="80" value="${esc(fr?.autor || '')}"></label>
+          <label class="campo"><span>Fonte (livro, sermão, ano)</span><input class="input" name="fonte" maxlength="120" value="${esc(fr?.fonte || '')}"></label></div></form>`,
+        rodape: '<button class="btn sec" data-fechar>Cancelar</button><button class="btn" id="salvar-frase">Salvar</button>' });
+      md.el.querySelector('#salvar-frase').addEventListener('click', async () => {
+        const ff = md.el.querySelector('#f-frase'); if (!ff.reportValidity()) return;
+        const corpo = { frase: ff.frase.value, autor: ff.autor.value, fonte: ff.fonte.value };
+        try { await VB.api(fr ? `/api/admin/frases/${fr.id}` : '/api/admin/frases', { method: fr ? 'PUT' : 'POST', body: corpo }); md.fechar(); VB.toast('Frase salva'); VB.rota(); } catch (er) { VB.erro(er); }
+      });
+    };
+    $('#nova-frase').addEventListener('click', () => formFrase(null));
+    $$('[data-frase-editar]').forEach(b => b.addEventListener('click', () => formFrase(d.frases.find(x => x.id === Number(b.dataset.fraseEditar)))));
+    $$('[data-frase-ativa]').forEach(c => c.addEventListener('change', async () => { await VB.api(`/api/admin/frases/${c.dataset.fraseAtiva}`, { method: 'PUT', body: { ativo: c.checked } }); VB.rota(); }));
+    $$('[data-frase-excluir]').forEach(b => b.addEventListener('click', async () => {
+      if (!(await VB.confirmar('Excluir frase', 'A IA deixará de poder citar esta frase.'))) return;
+      await VB.api(`/api/admin/frases/${b.dataset.fraseExcluir}`, { method: 'DELETE' }); VB.toast('Frase excluída'); VB.rota();
+    }));
   });
 
   // ── Inscrições vindas da página pública /inscricao

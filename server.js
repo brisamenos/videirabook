@@ -28,6 +28,7 @@ const ESTATICOS = {
   '/js/core.js': 'core.js',
   '/js/aluno.js': 'aluno.js',
   '/js/professor.js': 'professor.js',
+  '/js/sermao.js': 'sermao.js',
   '/img/logo.svg': 'logo.svg',
   '/fonts/newsreader-latin-opsz-normal.woff2': 'newsreader-latin-opsz-normal.woff2',
   '/fonts/newsreader-latin-opsz-italic.woff2': 'newsreader-latin-opsz-italic.woff2',
@@ -146,8 +147,8 @@ app.post('/api/login', h((req, res) => {
 app.post('/api/logout', (req, res) => { res.clearCookie('vb_token'); res.json({ ok: true }); });
 
 app.get('/api/me', auth, h((req, res) => {
-  const cfg = getConfig(); delete cfg._segredo;
-  res.json({ usuario: req.user, config: cfg });
+  const cfg = getConfig(); for (const k of Object.keys(cfg)) if (k[0] === '_') delete cfg[k];
+  res.json({ usuario: { ...req.user, ia: require('./sermoes').podeIA(req.user) }, config: cfg });
 }));
 app.put('/api/me/senha', auth, h((req, res) => {
   const { atual, nova } = req.body || {};
@@ -260,7 +261,7 @@ app.get('/api/cursos/:id', auth, h((req, res) => {
 }));
 
 app.get('/api/inicio', auth, h((req, res) => {
-  const cfg = getConfig(); delete cfg._segredo;
+  const cfg = getConfig(); for (const k of Object.keys(cfg)) if (k[0] === '_') delete cfg[k];
   const cursos = db.prepare('SELECT id FROM cursos WHERE publicado = 1 ORDER BY ordem, id').all();
   const visoes = cursos.map(c => visaoCurso(c.id, req.user));
   const hj = hoje();
@@ -442,9 +443,9 @@ P.get('/alunos/:id', h((req, res) => {
 }));
 
 // Configurações
-P.get('/config', h((req, res) => { const c = getConfig(); delete c._segredo; res.json(c); }));
+P.get('/config', h((req, res) => { const c = getConfig(); for (const k of Object.keys(c)) if (k[0] === '_') delete c[k]; res.json(c); }));
 P.put('/config', h((req, res) => {
-  const permitidas = ['nome_turma', 'dia_semana', 'horario', 'duracao_min', 'local', 'data_inicio', 'dias_antes_liberar', 'sequencial', 'inscricoes_abertas'];
+  const permitidas = ['nome_turma', 'dia_semana', 'horario', 'duracao_min', 'local', 'data_inicio', 'dias_antes_liberar', 'sequencial', 'inscricoes_abertas', 'biblia_padrao', 'ia_ativa', 'ia_modelo', 'ia_limite_dia'];
   for (const k of permitidas) if (req.body[k] !== undefined) setConfig(k, req.body[k]);
   if (req.body.recalcular) for (const c of db.prepare('SELECT id FROM cursos').all()) recalcularDatas(c.id);
   res.json({ ok: true });
@@ -742,30 +743,74 @@ P.delete('/avisos/:id', h((req, res) => { db.prepare('DELETE FROM avisos WHERE i
 
 app.use('/api/admin', P);
 
-// ── Bíblias dentro do app — cada versão é carregada só quando alguém abre pela primeira vez
-const ARQ_BIBLIA = { alm: 'biblia.json', ara: 'biblia-ara.json', acf: 'biblia-acf.json', nvi: 'biblia-nvi.json', nvt: 'biblia-nvt.json', kjf: 'biblia-kjf.json' };
-const BIBLIAS = {};
-function biblia(cod) {
-  if (!ARQ_BIBLIA[cod]) cod = 'alm';
-  if (!BIBLIAS[cod]) {
-    // fica em modulos/biblias/; se não achar lá, procura na pasta principal (instalações antigas)
-    const arq = [path.join(__dirname, 'modulos', 'biblias', ARQ_BIBLIA[cod]), path.join(__dirname, ARQ_BIBLIA[cod])].find(f => fs.existsSync(f));
-    if (!arq) return cod === 'alm' ? null : biblia('alm');
-    BIBLIAS[cod] = JSON.parse(fs.readFileSync(arq, 'utf8'));
-  }
-  return BIBLIAS[cod];
-}
-app.get('/api/biblia/:livro/:cap', auth, h((req, res) => {
-  const b = biblia(String(req.query.v || 'alm'));
-  const n = Number(req.params.livro), cap = Number(req.params.cap);
-  const livro = b && b.livros[n];
-  const versos = livro && livro[cap - 1];
-  if (!versos) return res.status(404).json({ erro: 'Capítulo não encontrado.' });
-  const titulos = {};
-  if (b.titulos) versos.forEach((_, i) => { const t = b.titulos[`${n}.${cap}.${i + 1}`]; if (t) titulos[i + 1] = t; });
-  res.set('Cache-Control', 'private, max-age=86400');
-  res.json({ versao: b.versao, sigla: b.sigla || 'Almeida', licenca: b.licenca, versos, titulos });
+// ── Bíblias e dicionários (módulos MySword/MyBible — os que vêm com o app e os importados pelo professor)
+const BIB = require('./biblioteca');
+const publicoMod = r => ({ cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '' });
+app.get('/api/biblioteca', auth, h((req, res) => {
+  res.json({ padrao: BIB.padrao(), biblias: BIB.listar('biblia').map(publicoMod), dicionarios: BIB.listar('dicionario').map(publicoMod) });
 }));
+app.get('/api/biblia/busca', auth, h((req, res) => {
+  const q = String(req.query.q || '').trim();
+  if (q.length < 3) return res.status(400).json({ erro: 'Digite pelo menos 3 letras para procurar.' });
+  const de = Math.max(0, Math.min(65, Number(req.query.de) || 0)), ate = Math.max(de, Math.min(65, req.query.ate === undefined ? 65 : Number(req.query.ate)));
+  res.json(BIB.buscar(String(req.query.v || ''), q.slice(0, 80), { de, ate }));
+}));
+app.get('/api/biblia/:livro/:cap', auth, h((req, res) => {
+  const c = BIB.capitulo(String(req.query.v || BIB.padrao()), Number(req.params.livro), Number(req.params.cap));
+  if (!c) return res.status(404).json({ erro: 'Capítulo não encontrado.' });
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.json(c);
+}));
+app.get('/api/dicionario/:cod', auth, h((req, res) => {
+  if (!BIB.dicionario(req.params.cod)) return res.status(404).json({ erro: 'Dicionário não encontrado.' });
+  res.json(BIB.verbetes(req.params.cod, String(req.query.q || '').slice(0, 60)));
+}));
+app.get('/api/dicionario/:cod/verbete', auth, h((req, res) => {
+  const v = BIB.verbete(req.params.cod, String(req.query.p || ''));
+  if (!v) return res.status(404).json({ erro: 'Verbete não encontrado.' });
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.json(v);
+}));
+app.get('/api/modulos/:cod/imagem/:id', auth, h((req, res) => {
+  const im = BIB.imagem(req.params.cod, req.params.id);
+  if (!im || !im.content) return res.status(404).end();
+  const b = Buffer.from(im.content);
+  const tipo = b[0] === 0x89 ? 'image/png' : b[0] === 0xFF ? 'image/jpeg' : b[0] === 0x47 ? 'image/gif' : 'image/bmp';
+  res.set({ 'Content-Type': tipo, 'Cache-Control': 'private, max-age=86400' }).send(b);
+}));
+// Professor: importar e organizar módulos
+P.get('/biblioteca', h((req, res) => {
+  res.json({ padrao: BIB.padrao(), lista: db.prepare('SELECT * FROM biblioteca ORDER BY tipo, ordem, id').all()
+    .map(r => ({ ...r, arquivo: undefined, existe: fs.existsSync(BIB.caminho(r)) })) });
+}));
+P.post('/biblioteca', upload.single('arquivo'), h((req, res) => {
+  if (!req.file) return res.status(400).json({ erro: 'Escolha o arquivo do módulo.' });
+  try { const r = BIB.importar(req.file.path, nomeOriginal(req.file)); res.json({ ok: true, ...r }); }
+  catch (e) { fs.promises.unlink(req.file.path).catch(() => {}); res.status(400).json({ erro: e.message }); }
+}));
+P.put('/biblioteca/:cod', h((req, res) => {
+  const r = BIB.porCod(req.params.cod); if (!r) return res.status(404).json({ erro: 'Módulo não encontrado.' });
+  const b = req.body || {}; const t = (v, n) => String(v ?? '').trim().slice(0, n);
+  db.prepare('UPDATE biblioteca SET sigla = ?, titulo = ?, creditos = ?, ativo = ? WHERE id = ?').run(
+    t(b.sigla ?? r.sigla, 20) || r.sigla, t(b.titulo ?? r.titulo, 120) || r.titulo, t(b.creditos ?? r.creditos, 200), b.ativo === undefined ? r.ativo : (b.ativo ? 1 : 0), r.id);
+  res.json({ ok: true });
+}));
+P.post('/biblioteca/:cod/mover', h((req, res) => {
+  const r = BIB.porCod(req.params.cod); if (!r) return res.status(404).json({ erro: 'Módulo não encontrado.' });
+  const lista = db.prepare('SELECT id FROM biblioteca WHERE tipo = ? ORDER BY ordem, id').all(r.tipo).map(x => x.id);
+  const i = lista.indexOf(r.id), j = i + (Number(req.body && req.body.dir) < 0 ? -1 : 1);
+  if (j >= 0 && j < lista.length) [lista[i], lista[j]] = [lista[j], lista[i]];
+  const up = db.prepare('UPDATE biblioteca SET ordem = ? WHERE id = ?');
+  db.transaction(() => lista.forEach((id, k) => up.run(k + 1, id)))();
+  res.json({ ok: true });
+}));
+P.delete('/biblioteca/:cod', h((req, res) => {
+  try { BIB.remover(req.params.cod); res.json({ ok: true }); } catch (e) { res.status(400).json({ erro: e.message }); }
+}));
+
+// ── Ferramenta de sermões com IA
+const SERMOES = require('./sermoes');
+SERMOES(app, P, auth, h);
 
 // O site Bíblia Online deixa ser aberto dentro de outra página? (verificado 1x por dia)
 let embutir = { permitido: null, em: 0 };

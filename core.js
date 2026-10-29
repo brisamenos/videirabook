@@ -90,6 +90,8 @@ window.VB = (function () {
     calendario: I('<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'),
     externo: I('<path d="M14 4h6v6"/><path d="M20 4l-9 9"/><path d="M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>'),
     check: I('<path d="M5 12l5 5L20 7"/>'),
+    caneta: I('<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/>'),
+    faisca: I('<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>'),
     upload: I('<path d="M12 16V4"/><path d="M7 9l5-5 5 5"/><path d="M4 16v4h16v-4"/>'),
   };
   VB.iconeTipo = t => VB.icone[{ video: 'video', pdf: 'pdf', texto: 'texto', link: 'link', audio: 'audio' }[t] || 'texto'];
@@ -229,7 +231,7 @@ window.VB = (function () {
       b.disabled = true; VB.$('#erro-login').textContent = '';
       try {
         await VB.api('/api/login', { method: 'POST', body: { usuario: f.get('usuario'), senha: f.get('senha') } });
-        await VB.carregarMe();
+        await VB.carregarMe(); await VB.carregarBiblioteca();
         location.hash = VB.me.papel === 'professor' ? '#/p/painel' : '#/inicio';
         VB.rota();
       } catch (er) { VB.$('#erro-login').textContent = er.message; b.disabled = false; }
@@ -282,11 +284,20 @@ window.VB = (function () {
   };
 
   // ── Bíblia: livros, versões e links (o texto abre no site Bíblia Online)
-  // [código, sigla, nome, fica dentro do app?]
+  // [código, sigla, nome, fica dentro do app?] — a lista real vem do servidor (módulos instalados pelo professor)
   VB.VERSOES = [['ara', 'ARA', 'Almeida Revista e Atualizada', true], ['acf', 'ACF', 'Almeida Corrigida Fiel', true],
     ['nvi', 'NVI', 'Nova Versão Internacional', true], ['nvt', 'NVT', 'Nova Versão Transformadora', true],
-    ['kjf', 'KJF', 'King James Fiel 1611', true], ['alm', 'Almeida', 'Almeida 1819', true],
-    ['arc', 'ARC', 'Almeida Revista e Corrigida · abre no site', false]];
+    ['kjf', 'KJF', 'King James Fiel 1611', true], ['alm', 'Almeida', 'Almeida 1819', true]];
+  VB.DICIONARIOS = []; VB.bibliaPadrao = 'ara';
+  VB.normalizar = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  VB.carregarBiblioteca = async function () {
+    try {
+      const b = await VB.api('/api/biblioteca');
+      if (b.biblias.length) VB.VERSOES = b.biblias.map(x => [x.cod, x.sigla, x.titulo, true]);
+      if (!VB.VERSOES.some(v => /^arc$/i.test(v[1]))) VB.VERSOES.push(['arc', 'ARC', 'Almeida Revista e Corrigida · abre no site', false]);
+      VB.DICIONARIOS = b.dicionarios; VB.bibliaPadrao = b.padrao;
+    } catch { /* fica com a lista padrão */ }
+  };
   VB.versaoInterna = c => !!(VB.VERSOES.find(v => v[0] === c) || [])[3];
   // [nome, abreviação, código no site, capítulos, outros nomes]
   VB.LIVROS = [
@@ -308,15 +319,52 @@ window.VB = (function () {
     ['Tiago', 'Tg', 'tg', 5], ['1 Pedro', '1 Pe', '1pe', 5], ['2 Pedro', '2 Pe', '2pe', 3], ['1 João', '1 Jo', '1jo', 5],
     ['2 João', '2 Jo', '2jo', 1], ['3 João', '3 Jo', '3jo', 1], ['Judas', 'Jd', 'jd', 1], ['Apocalipse', 'Ap', 'ap', 22],
   ];
-  VB.versaoBiblia = () => { const v = VB.pref.get('versao', 'ara'); return VB.VERSOES.some(x => x[0] === v) ? v : 'ara'; };
+  VB.versaoBiblia = () => { const v = VB.pref.get('versao', VB.bibliaPadrao); return VB.VERSOES.some(x => x[0] === v) ? v : (VB.VERSOES[0] || ['ara'])[0]; };
   // Texto de um capítulo como parágrafos (títulos de seção, versículo destacado, versão comparada)
-  VB.htmlVersos = (d, { ini = 0, fim = 0, destaque = 0, comp = null } = {}) => d.versos.map((t, i) => {
-    const n = i + 1; if (ini && (n < ini || n > fim)) return '';
-    const fmt = s => esc(s).replace(/\[([^\]]+)\]/g, '<em>$1</em>');
-    const tit = d.titulos && d.titulos[n] && !ini ? `<h4 class="titulo-secao">${esc(d.titulos[n])}</h4>` : '';
-    const c = comp && comp.versos[i] ? `<p class="comparado"><b>${esc(comp.sigla)}</b>${fmt(comp.versos[i])}</p>` : '';
-    return `${tit}<p id="v${n}" class="${destaque === n ? 'destaque' : ''}"><sup>${n}</sup>${fmt(t)}</p>${c}`;
-  }).join('');
+  VB.htmlVersos = (d, { ini = 0, fim = 0, destaque = 0, comp = null } = {}) => {
+    const fimPar = new Set(d.fim || []), recuo = d.recuo || {};
+    const epi = d.epigrafe && (!ini || ini === 1) ? `<p class="epigrafe">${esc(d.epigrafe)}</p>` : '';
+    return epi + d.versos.map((t, i) => {
+      const n = i + 1; if (ini && (n < ini || n > fim)) return '';
+      const tit = d.titulos && d.titulos[n] && !ini ? `<h4 class="titulo-secao">${esc(d.titulos[n])}</h4>` : '';
+      const c = comp && comp.versos[i] ? `<p class="comparado"><b>${esc(comp.sigla)}</b>${comp.versos[i]}</p>` : '';
+      const cls = [destaque === n ? 'destaque' : '', fimPar.has(n) ? 'fim-par' : '', recuo[n] ? `recuo-${Math.min(4, recuo[n])}` : ''].filter(Boolean).join(' ');
+      return `${tit}<p id="v${n}"${cls ? ` class="${cls}"` : ''}><sup>${n}</sup>${t}</p>${c}`;
+    }).join('');
+  };
+  // Verbete de dicionário numa janela (usado fora da tela do dicionário)
+  VB.prepararVerbete = raiz => {
+    raiz.querySelectorAll('a.ref-biblia[data-livro]').forEach(a => {
+      const l = VB.LIVROS[Number(a.dataset.livro)]; if (l) a.href = VB.rotaBiblia(l, Number(a.dataset.cap), Number(a.dataset.ini) || 0);
+    });
+    VB.linkarReferencias(raiz);
+  };
+  VB.popupVerbete = async function (cod, palavra) {
+    const m = VB.modal({ titulo: esc(palavra), corpo: '<div class="carregando" style="min-height:120px"></div>',
+      rodape: `<a class="btn sec" href="#/dicionario/${encodeURIComponent(cod)}/${encodeURIComponent(palavra)}" data-fechar>Abrir no dicionário</a><button class="btn" data-fechar>Fechar</button>` });
+    const corpo = m.el.querySelector('.modal-corpo');
+    try {
+      const v = await VB.api(`/api/dicionario/${encodeURIComponent(cod)}/verbete?p=${encodeURIComponent(palavra)}`);
+      corpo.innerHTML = `<div class="leitura verbete popup-versos" data-dic="${esc(cod)}">${v.html}</div><p class="pequeno muted" style="margin:.8rem 0 0">${esc(v.dicionario)}</p>`;
+      VB.prepararVerbete(corpo);
+    } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+  };
+  document.addEventListener('click', e => {
+    const a = e.target.closest('a.ref-verbete[data-verbete]'); if (!a) return;
+    e.preventDefault();
+    const cod = (a.closest('[data-dic]') || {}).dataset?.dic || (VB.DICIONARIOS[0] || {}).cod; if (!cod) return;
+    if (a.closest('[data-dic-pagina]')) location.hash = `#/dicionario/${encodeURIComponent(cod)}/${encodeURIComponent(a.dataset.verbete)}`;
+    else { const aberto = a.closest('.modal-fundo, .modal'); if (aberto) aberto.querySelector('[data-fechar]')?.click(); VB.popupVerbete(cod, a.dataset.verbete); }
+  });
+  // Nota de rodapé de um versículo
+  document.addEventListener('click', e => {
+    const b = e.target.closest('button.nota[data-nota]'); if (!b) return;
+    e.preventDefault(); e.stopPropagation();
+    const prox = b.nextElementSibling;
+    if (prox && prox.classList.contains('nota-texto')) { prox.remove(); b.setAttribute('aria-expanded', 'false'); return; }
+    const sp = document.createElement('span'); sp.className = 'nota-texto'; sp.textContent = b.dataset.nota;
+    b.after(sp); b.setAttribute('aria-expanded', 'true');
+  });
   VB.rotaBiblia = (livro, cap, verso) => `#/biblia/${encodeURIComponent(livro[2])}/${cap}${verso ? `/${verso}` : ''}`;
   VB.urlBiblia = (livro, cap, versao = VB.versaoBiblia()) =>
     `https://www.bibliaonline.com.br/${versao}/${encodeURIComponent(livro[2])}/${cap}`;
@@ -366,7 +414,7 @@ window.VB = (function () {
     const livro = VB.LIVROS[Number(a.dataset.livro)]; const cap = Number(a.dataset.cap);
     const ini = Number(a.dataset.ini) || 0; const fim = Math.max(ini, Number(a.dataset.fim) || ini);
     const ref = `${livro[0]} ${cap}${ini ? `.${ini}${fim > ini ? `-${fim}` : ''}` : ''}`;
-    let v = VB.versaoInterna(VB.versaoBiblia()) ? VB.versaoBiblia() : 'ara';
+    let v = VB.versaoInterna(VB.versaoBiblia()) ? VB.versaoBiblia() : VB.bibliaPadrao;
     const m = VB.modal({
       titulo: esc(ref),
       corpo: `<div class="popup-trocar" role="radiogroup" aria-label="Versão">${VB.VERSOES.filter(x => x[3]).map(x =>
@@ -417,7 +465,7 @@ window.VB = (function () {
     if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('/sw.js').catch(() => {});
     window.addEventListener('hashchange', VB.rota);
     document.getElementById('app').innerHTML = '<div class="carregando"></div>';
-    try { await VB.carregarMe(); } catch (e) {
+    try { await VB.carregarMe(); await VB.carregarBiblioteca(); } catch (e) {
       if (e.message !== 'Sessão encerrada' && (!navigator.onLine || !e.status)) {
         document.getElementById('app').innerHTML = `<div class="bloqueio" style="min-height:80vh;display:grid;place-content:center;text-align:center;padding:24px">
           <img src="/icon-192.png" alt="" width="72" height="72" style="margin:0 auto 1rem;border-radius:18px">

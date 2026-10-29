@@ -55,6 +55,24 @@ Os interessados se inscrevem em **/inscricao** (por exemplo, `https://seu-endere
 - **Baixar planilha** gera um arquivo para abrir no Excel.
 - Para parar de receber inscrições, desligue “Aceitando novas inscrições”.
 
+## Bíblias e dicionários (módulos MySword)
+
+Em **Módulos bíblicos**, o professor importa Bíblias (`.bbl.mybible`) e dicionários (`.dct.mybible`) do MySword, e também Bíblias do MyBible. Os arquivos ficam no volume (`/app/data/modulos`), então continuam lá depois de cada deploy.
+
+- Dá para mudar a ordem, escolher a versão padrão, desativar e editar o nome e os créditos.
+- Títulos de seção, epígrafes dos Salmos, palavras de Jesus em vermelho, notas de rodapé e parágrafos aparecem quando o módulo traz essas marcações.
+- Os alunos ganham **Dicionário** e **Concordância** (busca de palavra ou frase) dentro da área Bíblia.
+- ARA, ACF, NVI, NVT, KJF e Almeida 1819 já vêm com o app, na pasta `modulos/biblias`.
+
+## Sermões com IA
+
+Em **Sermões com IA**, o professor salva a chave da OpenAI, escolhe o modelo, define um limite diário por pessoa e marca quem pode usar a ferramenta. Ele sempre tem acesso.
+
+- O pregador escolhe o tipo de sermão (textual, temático, histórico ou expositivo), o texto base, o público, a ocasião e a duração.
+- A IA recebe o texto bíblico real do módulo escolhido, os verbetes do dicionário e só as frases cadastradas pelo professor.
+- Depois o pregador ajusta o sermão conversando com a IA. As referências bíblicas abrem o versículo ao toque.
+- Há também modo púlpito (tela cheia, letra grande), cópia, impressão e edição manual.
+
 ## Regras de liberação
 
 - A aula abre sozinha X dias antes do encontro (padrão: 7) para o pré-estudo.
@@ -73,6 +91,11 @@ Cada aula tem um texto de estudo completo na pasta `teologia/` (`aula-01.html` �
 
 ```
 server.js        rotas da API e regras de acesso
+mysword.js       leitura de módulos MySword/MyBible
+biblioteca.js    Bíblias e dicionários instalados
+sermoes.js       ferramenta de sermões com IA (servidor)
+sermao.js        ferramenta de sermões (tela)
+modulos/biblias/ Bíblias que vêm com o app
 db.js            banco SQLite, configuração padrão e importação da grade
 curriculo.js     grade das 26 aulas (títulos, perguntas, páginas)
 teologia/        textos completos de estudo, um arquivo por aula

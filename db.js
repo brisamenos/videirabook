@@ -126,6 +126,47 @@ CREATE TABLE IF NOT EXISTS avisos (
   fixado INTEGER NOT NULL DEFAULT 0,
   criado_em TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS biblioteca (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  cod TEXT NOT NULL UNIQUE,
+  tipo TEXT NOT NULL,              -- biblia | dicionario
+  formato TEXT NOT NULL,           -- mysword | mybible | json
+  arquivo TEXT NOT NULL,           -- embutido:NOME ou dados:NOME
+  sigla TEXT NOT NULL,
+  titulo TEXT NOT NULL,
+  creditos TEXT,
+  descricao TEXT,
+  ordem INTEGER NOT NULL DEFAULT 99,
+  ativo INTEGER NOT NULL DEFAULT 1,
+  embutido INTEGER NOT NULL DEFAULT 0,
+  tamanho INTEGER,
+  criado_em TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS frases (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  autor TEXT NOT NULL,
+  frase TEXT NOT NULL,
+  fonte TEXT,
+  ativo INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS sermoes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  titulo TEXT NOT NULL DEFAULT 'Novo sermão',
+  tipo TEXT NOT NULL,
+  referencia TEXT, livro INTEGER, cap INTEGER, ini INTEGER, fim INTEGER,
+  tema TEXT, publico TEXT, ocasiao TEXT, duracao INTEGER, formato TEXT, versao TEXT,
+  dicionarios TEXT, palavras TEXT, observacoes TEXT,
+  conteudo TEXT NOT NULL DEFAULT '',
+  chat TEXT NOT NULL DEFAULT '[]',
+  fontes TEXT NOT NULL DEFAULT '{}',
+  criado_em TEXT DEFAULT (datetime('now','localtime')),
+  atualizado_em TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS ia_uso (
+  usuario_id INTEGER NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (usuario_id, dia)
+);
 CREATE TABLE IF NOT EXISTS inscricoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   nome TEXT NOT NULL,
@@ -138,6 +179,28 @@ CREATE TABLE IF NOT EXISTS inscricoes (
 );
 `);
 
+// Colunas novas em bancos antigos
+if (!db.prepare('PRAGMA table_info(usuarios)').all().some(c => c.name === 'pode_ia')) db.exec('ALTER TABLE usuarios ADD COLUMN pode_ia INTEGER NOT NULL DEFAULT 0');
+
+// Frases iniciais de homens de Deus (o professor pode editar, desativar e acrescentar)
+if (!db.prepare('SELECT COUNT(*) n FROM frases').get().n) {
+  const ins = db.prepare('INSERT INTO frases (autor, frase, fonte) VALUES (?,?,?)');
+  [
+    ['Agostinho de Hipona', 'Tu nos fizeste para ti, e inquieto está o nosso coração enquanto não repousa em ti.', 'Confissões, livro I'],
+    ['Martinho Lutero', 'Minha consciência está cativa à Palavra de Deus.', 'Dieta de Worms, 1521'],
+    ['Richard Baxter', 'Preguei como quem nunca tem certeza de pregar outra vez, e como um moribundo a moribundos.', 'Love Breathing Thanks and Praise'],
+    ['William Carey', 'Espere grandes coisas de Deus; empreenda grandes coisas para Deus.', 'Sermão em Nottingham, 1792'],
+    ['John Wesley', 'Dá-me cem pregadores que nada temam senão o pecado e nada desejem senão a Deus, e eu abalarei as portas do inferno.', 'Carta a Alexander Mather, 1790'],
+    ['Jim Elliot', 'Não é tolo quem dá o que não pode reter para ganhar o que não pode perder.', 'Diário, 1949'],
+    ['Dietrich Bonhoeffer', 'Quando Cristo chama um homem, ele o chama para vir e morrer.', 'Discipulado'],
+    ['A. W. Tozer', 'O que vem à nossa mente quando pensamos em Deus é o que há de mais importante a nosso respeito.', 'O Conhecimento do Santo'],
+    ['C. S. Lewis', 'Creio no cristianismo como creio que o sol nasceu: não apenas porque o vejo, mas porque por meio dele vejo todas as outras coisas.', 'O peso da glória'],
+    ['John Piper', 'Deus é mais glorificado em nós quando estamos mais satisfeitos nele.', 'Em busca de Deus'],
+    ['Charles H. Spurgeon', 'Defender a Bíblia? Eu preferiria defender um leão. Solte-o, e ele se defenderá sozinho.', 'Atribuída (sermões)'],
+    ['Hudson Taylor', 'A obra de Deus, feita à maneira de Deus, nunca carecerá dos recursos de Deus.', 'Atribuída'],
+  ].forEach(f => ins.run(...f));
+}
+
 // ── Configurações padrão
 const cfgPadrao = {
   nome_turma: 'Escola Bíblica — Turma 2026',
@@ -149,6 +212,10 @@ const cfgPadrao = {
   dias_antes_liberar: '7',  // aula abre X dias antes do encontro (pré-estudo)
   sequencial: '1',          // aluno precisa concluir a anterior para abrir a próxima
   inscricoes_abertas: '1',  // página pública /inscricao aceita novas inscrições
+  biblia_padrao: 'ara',     // versão que abre primeiro para quem nunca escolheu
+  ia_ativa: '0',            // ferramenta de sermões ligada
+  ia_modelo: 'gpt-6.1-sol', // modelo da OpenAI
+  ia_limite_dia: '15',      // gerações/ajustes por pessoa por dia
 };
 const insCfg = db.prepare('INSERT OR IGNORE INTO config (chave, valor) VALUES (?, ?)');
 for (const [k, v] of Object.entries(cfgPadrao)) insCfg.run(k, v);

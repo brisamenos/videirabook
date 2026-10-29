@@ -12,6 +12,7 @@
       ['avisos', '#/avisos', 'Avisos', icone.sino],
       ['perfil', '#/perfil', 'Perfil', icone.pessoa],
     ];
+    if (VB.me.ia) links.splice(3, 0, ['sermoes', '#/sermoes', 'Sermões', icone.caneta]);
     document.getElementById('app').innerHTML = `
       <header class="topo"><div class="topo-in">
         <a class="marca" href="#/inicio"><img src="/img/logo.svg" alt="">VideiraBook</a>
@@ -27,7 +28,7 @@
       </div></header>
       <main class="pagina" id="conteudo">${conteudo}</main>
       <nav class="tabbar" aria-label="Navegação">
-        ${(ehProf ? [...links.slice(0, 4), ['painel', '#/p/painel', 'Professor', icone.painel]] : links)
+        ${(ehProf ? [...links.filter(l => l[0] !== 'perfil' && !(VB.me.ia && l[0] === 'avisos')), ['painel', '#/p/painel', 'Professor', icone.painel]] : links)
           .map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}<span>${l[2]}</span></a>`).join('')}
       </nav>`;
     $('#btn-leitura').addEventListener('click', VB.painelLeitura);
@@ -464,6 +465,7 @@
     let livro = null;
     $('#conteudo').innerHTML = `<div class="estreita biblia">
       <div class="saudacao"><div><h1>Bíblia</h1><p>Escolha a versão, o livro e o capítulo para ler aqui mesmo.</p></div></div>
+      ${abasBiblia('ler')}
       <section class="painel"><h3>Versão</h3>${chipsVersao()}
         <label class="campo" id="campo-comparar" style="margin:1rem 0 0"><span>Comparar com outra versão (versículo por versículo)</span>
           <select class="input" id="comparar"><option value="">Não comparar</option>${VB.VERSOES.filter(v => v[3]).map(v => `<option value="${v[0]}">${v[1]} — ${v[2]}</option>`).join('')}</select></label>
@@ -484,7 +486,7 @@
         <div id="livros" class="livros"></div>
         <div id="capitulos" class="capitulos" hidden></div>
       </section>
-      <p class="pequeno muted" style="margin-top:14px">ARA, ACF, NVI, NVT, KJF e Almeida 1819 ficam guardadas no app. A ARC abre numa janela do site Bíblia Online, sem sair do app.</p>
+      <p class="pequeno muted" style="margin-top:14px">As versões ficam guardadas no próprio app. Cada uma mostra os créditos da editora no fim do capítulo.</p>
     </div>`;
     const atualizarComparar = () => { $('#campo-comparar').hidden = !VB.versaoInterna(VB.versaoBiblia()); $('#comparar').value = VB.pref.get('comparar', ''); };
     const desenharLivros = () => {
@@ -572,6 +574,117 @@
     };
     ligarChips(desenhar);
     desenhar();
+  });
+
+  // ── Abas da área Bíblia: Ler, Dicionário, Concordância
+  function abasBiblia(ativa) {
+    const abas = [['ler', '#/biblia', 'Ler'], ...(VB.DICIONARIOS.length ? [['dic', '#/dicionario', 'Dicionário']] : []), ['conc', '#/concordancia', 'Concordância']];
+    return `<nav class="abas-biblia" aria-label="Bíblia">${abas.map(a => `<a href="${a[1]}"${a[0] === ativa ? ' aria-current="page"' : ''}>${a[2]}</a>`).join('')}</nav>`;
+  }
+  VB.abasBiblia = abasBiblia;
+
+  // ── Dicionário
+  VB.registrar(/^\/dicionario(?:\/([^/]+)(?:\/(.+))?)?$/, 'todos', async (codS, palavraS) => {
+    moldura('biblia', '');
+    document.title = 'Dicionário · VideiraBook';
+    if (!VB.DICIONARIOS.length) {
+      $('#conteudo').innerHTML = `<div class="estreita"><div class="saudacao"><div><h1>Dicionário</h1></div></div>${abasBiblia('dic')}
+        <div class="painel vazio"><strong>Nenhum dicionário instalado</strong>O professor pode importar dicionários do MySword no painel, em Módulos bíblicos.</div></div>`;
+      return;
+    }
+    const cod = codS && VB.DICIONARIOS.some(d => d.cod === decodeURIComponent(codS)) ? decodeURIComponent(codS) : VB.pref.get('dicionario', VB.DICIONARIOS[0].cod);
+    const dic = VB.DICIONARIOS.find(d => d.cod === cod) || VB.DICIONARIOS[0];
+    VB.pref.set('dicionario', dic.cod);
+    const palavra = palavraS ? decodeURIComponent(palavraS) : '';
+    $('#conteudo').innerHTML = `<div class="dic-pagina${palavra ? ' com-verbete' : ''}" data-dic-pagina data-dic="${esc(dic.cod)}">
+      <div class="saudacao"><div><h1>Dicionário</h1><p>${esc(dic.titulo)}</p></div></div>
+      ${abasBiblia('dic')}
+      <div class="dic-grade">
+        <aside class="painel dic-lado">
+          ${VB.DICIONARIOS.length > 1 ? `<label class="campo" style="margin:0 0 .7rem"><span>Dicionário</span><select class="input" id="dic-escolha">${VB.DICIONARIOS.map(d => `<option value="${esc(d.cod)}"${d.cod === dic.cod ? ' selected' : ''}>${esc(d.sigla)} — ${esc(d.titulo)}</option>`).join('')}</select></label>` : ''}
+          <input class="input" id="dic-busca" type="search" placeholder="Procurar palavra (ex.: graça)" aria-label="Procurar palavra" autocomplete="off">
+          <div class="dic-lista" id="dic-lista"><div class="carregando" style="min-height:80px"></div></div>
+        </aside>
+        <article class="painel dic-verbete" id="dic-verbete">${palavra ? '<div class="carregando"></div>' : `<div class="vazio" style="border:0"><strong>Escolha uma palavra</strong>Procure pelo nome e toque no resultado. As referências bíblicas abrem o versículo na hora.</div>`}</article>
+      </div></div>`;
+    const lista = $('#dic-lista');
+    let ult = 0;
+    const procurar = async q => {
+      const n = ++ult;
+      try {
+        const r = await VB.api(`/api/dicionario/${encodeURIComponent(dic.cod)}?q=${encodeURIComponent(q)}`);
+        if (n !== ult) return;
+        lista.innerHTML = r.length ? r.map(w => `<a href="#/dicionario/${encodeURIComponent(dic.cod)}/${encodeURIComponent(w)}"${w === palavra ? ' aria-current="true"' : ''}>${esc(w)}</a>`).join('')
+          : '<p class="muted pequeno" style="padding:.6rem">Nada encontrado com esse nome.</p>';
+      } catch (e) { lista.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+    };
+    let t; const busca = $('#dic-busca');
+    busca.value = VB.pref.get('dic_busca', '');
+    busca.addEventListener('input', () => { clearTimeout(t); VB.pref.set('dic_busca', busca.value); t = setTimeout(() => procurar(busca.value.trim()), 180); });
+    procurar(busca.value.trim());
+    if ($('#dic-escolha')) $('#dic-escolha').addEventListener('change', e => { location.hash = `#/dicionario/${encodeURIComponent(e.target.value)}`; });
+    if (palavra) {
+      const art = $('#dic-verbete');
+      try {
+        const v = await VB.api(`/api/dicionario/${encodeURIComponent(dic.cod)}/verbete?p=${encodeURIComponent(palavra)}`);
+        document.title = `${v.palavra} · Dicionário · VideiraBook`;
+        art.innerHTML = `<button type="button" class="btn sec mini dic-voltar" id="dic-voltar">← Palavras</button>
+          <h2 class="dic-titulo">${esc(v.palavra)}</h2><div class="leitura verbete">${v.html}</div>
+          <p class="pequeno muted biblia-credito">${esc(v.dicionario)}${v.creditos ? ` — ${esc(v.creditos)}` : ''}</p>`;
+        VB.prepararVerbete(art);
+        $('#dic-voltar').addEventListener('click', () => { location.hash = `#/dicionario/${encodeURIComponent(dic.cod)}`; });
+        if (innerWidth < 900) art.scrollIntoView({ block: 'start' });
+      } catch (e) { art.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+    }
+  });
+
+  // ── Concordância: procurar palavra ou frase na Bíblia
+  const marcar = (texto, termo) => {
+    const tn = [...texto].map(c => VB.normalizar(c)); const q = VB.normalizar(termo);
+    const plano = tn.join(''); if (!q) return esc(texto);
+    const idx = []; let i = plano.indexOf(q);
+    while (i >= 0) { idx.push(i); i = plano.indexOf(q, i + q.length); }
+    if (!idx.length) return esc(texto);
+    // converte posição no texto normalizado para posição no texto original
+    const mapa = []; let p = 0; [...texto].forEach((c, k) => { for (let x = 0; x < tn[k].length; x++) mapa[p++] = k; }); mapa[p] = [...texto].length;
+    const chars = [...texto]; let out = '', ult = 0;
+    idx.forEach(ii => { const a = mapa[ii], b = mapa[ii + q.length] ?? chars.length; out += esc(chars.slice(ult, a).join('')) + `<mark>${esc(chars.slice(a, b).join(''))}</mark>`; ult = b; });
+    return out + esc(chars.slice(ult).join(''));
+  };
+  VB.registrar(/^\/concordancia(?:\/([^/]+)\/(.+))?$/, 'todos', async (codS, termoS) => {
+    moldura('biblia', '');
+    document.title = 'Concordância · VideiraBook';
+    const termo = termoS ? decodeURIComponent(termoS) : '';
+    const v = codS && VB.VERSOES.some(x => x[0] === codS && x[3]) ? codS : (VB.versaoInterna(VB.versaoBiblia()) ? VB.versaoBiblia() : VB.bibliaPadrao);
+    const escopo = VB.pref.get('escopo', 'tudo');
+    $('#conteudo').innerHTML = `<div class="estreita">
+      <div class="saudacao"><div><h1>Concordância</h1><p>Encontre todos os versículos com uma palavra ou frase.</p></div></div>
+      ${abasBiblia('conc')}
+      <form class="painel conc-form" id="conc-form" autocomplete="off">
+        <label class="campo" style="margin:0;flex:2 1 260px"><span>Palavra ou frase</span><input class="input" name="q" required minlength="3" value="${esc(termo)}" placeholder="Ex.: graça, fruto do Espírito"></label>
+        <label class="campo" style="margin:0;flex:1 1 160px"><span>Versão</span><select class="input" name="v">${VB.VERSOES.filter(x => x[3]).map(x => `<option value="${x[0]}"${x[0] === v ? ' selected' : ''}>${esc(x[1])}</option>`).join('')}</select></label>
+        <label class="campo" style="margin:0;flex:1 1 160px"><span>Onde</span><select class="input" name="e">
+          <option value="tudo"${escopo === 'tudo' ? ' selected' : ''}>Toda a Bíblia</option><option value="at"${escopo === 'at' ? ' selected' : ''}>Antigo Testamento</option><option value="nt"${escopo === 'nt' ? ' selected' : ''}>Novo Testamento</option></select></label>
+        <button class="btn" type="submit" style="align-self:end">Procurar</button>
+      </form>
+      <div id="conc-res" style="margin-top:16px"></div></div>`;
+    $('#conc-form').addEventListener('submit', e => {
+      e.preventDefault(); const f = new FormData(e.target); VB.pref.set('escopo', f.get('e')); VB.pref.set('escopo_v', f.get('v'));
+      const q = String(f.get('q')).trim(); if (q.length < 3) return;
+      const alvo = `#/concordancia/${f.get('v')}/${encodeURIComponent(q)}`;
+      if (location.hash === alvo) VB.rota(); else location.hash = alvo;
+    });
+    if (!termo) return;
+    const res = $('#conc-res'); res.innerHTML = '<div class="carregando"></div>';
+    const [de, ate] = escopo === 'at' ? [0, 38] : escopo === 'nt' ? [39, 65] : [0, 65];
+    try {
+      const r = await VB.api(`/api/biblia/busca?v=${v}&q=${encodeURIComponent(termo)}&de=${de}&ate=${ate}`);
+      if (!r.lista.length) { res.innerHTML = `<div class="painel vazio"><strong>Nenhum versículo encontrado</strong>Tente outra palavra ou outra versão.</div>`; return; }
+      const grupos = new Map(); r.lista.forEach(x => { if (!grupos.has(x.l)) grupos.set(x.l, []); grupos.get(x.l).push(x); });
+      res.innerHTML = `<p class="muted pequeno" style="margin:0 0 .8rem">${r.mais ? `Mostrando os primeiros ${r.lista.length} versículos` : `${r.lista.length} versículo${r.lista.length === 1 ? '' : 's'}`} com “${esc(termo)}” na ${esc(r.sigla)}${r.mais ? '. Refine a busca para ver menos resultados.' : '.'}</p>
+        ${[...grupos].map(([l, itens]) => `<section class="painel conc-livro"><h3>${esc(VB.LIVROS[l][0])} <span class="muted pequeno">${itens.length}</span></h3>
+          ${itens.map(x => `<p class="conc-item"><a class="ref-biblia" data-livro="${l}" data-cap="${x.c}" data-ini="${x.v}" data-fim="${x.v}" href="${VB.rotaBiblia(VB.LIVROS[l], x.c, x.v)}">${esc(VB.LIVROS[l][1])} ${x.c}.${x.v}</a> ${marcar(x.t, termo)}</p>`).join('')}</section>`).join('')}`;
+    } catch (e) { res.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
   });
 
   // ── Perfil
