@@ -4,11 +4,44 @@ const fs = require('fs');
 const zlib = require('zlib');
 const Database = require('better-sqlite3');
 
-const ARQ = path.join(__dirname, 'modulos', 'originais', 'original.db');
+const { DATA_DIR } = require('./db');
+// Onde o banco pode estar: no volume (importado pelo professor ou descompactado) ou junto do app
+const NO_VOLUME = path.join(DATA_DIR, 'originais', 'original.db');
+const NO_APP = path.join(__dirname, 'modulos', 'originais', 'original.db');
+const COMPACTADO = path.join(__dirname, 'modulos', 'originais', 'original.db.gz');
 let db = null;
+const st = {};
+function valido(arq) {
+  try { const d = new Database(arq, { readonly: true, fileMustExist: true }); const ok = ['versos', 'lexico', 'ocorr'].every(t => d.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(t)); d.close(); return ok; } catch { return false; }
+}
 function abrir() {
-  if (!db) { if (!fs.existsSync(ARQ)) return null; db = new Database(ARQ, { readonly: true, fileMustExist: true }); }
+  if (db) return db;
+  let arq = [NO_VOLUME, NO_APP].find(f => fs.existsSync(f));
+  if (!arq && fs.existsSync(COMPACTADO)) {
+    // o GitHub não aceita arquivos grandes pelo site: o app traz a versão compactada e descompacta uma vez no volume
+    try {
+      fs.mkdirSync(path.dirname(NO_VOLUME), { recursive: true });
+      const tmp = NO_VOLUME + '.tmp'; fs.writeFileSync(tmp, zlib.gunzipSync(fs.readFileSync(COMPACTADO)));
+      if (valido(tmp)) { fs.renameSync(tmp, NO_VOLUME); arq = NO_VOLUME; console.log('[original] texto hebraico e grego descompactado no volume'); } else fs.unlinkSync(tmp);
+    } catch (e) { console.error('[original] não foi possível descompactar:', e.message); }
+  }
+  if (!arq) return null;
+  db = new Database(arq, { readonly: true, fileMustExist: true });
   return db;
+}
+// O professor pode enviar o original.db (ou original.db.gz) pela tela Módulos bíblicos
+function ehOriginal(arqTemp) {
+  try {
+    const fd = fs.openSync(arqTemp, 'r'); const b = Buffer.alloc(2); fs.readSync(fd, b, 0, 2, 0); fs.closeSync(fd);
+    if (b[0] === 0x1f && b[1] === 0x8b) { const dados = zlib.gunzipSync(fs.readFileSync(arqTemp)); fs.writeFileSync(arqTemp, dados); }
+  } catch { return false; }
+  return valido(arqTemp);
+}
+function instalar(arqTemp) {
+  fs.mkdirSync(path.dirname(NO_VOLUME), { recursive: true });
+  if (db) { try { db.close(); } catch {} db = null; for (const k of Object.keys(st)) delete st[k]; }
+  try { fs.renameSync(arqTemp, NO_VOLUME); } catch (e) { if (e.code !== 'EXDEV') throw e; fs.copyFileSync(arqTemp, NO_VOLUME); fs.unlinkSync(arqTemp); }
+  return !!abrir();
 }
 const CREDITOS = 'Hebraico (Códice de Leningrado, TAHOT) e grego (TAGNT, com as variantes da Nestle-Aland 28 e do Texto Recebido); léxicos TBESH/TBESG. Dados: STEP Bible — Tyndale House, Cambridge (STEPBible.org), licença CC BY 4.0.';
 
@@ -95,7 +128,6 @@ function alinharPortugues(textoBruto) {
   return mapa;
 }
 
-const st = {};
 const prep = (k, sql) => (st[k] ||= abrir().prepare(sql));
 const chaveExt = (s, suf) => { const m = String(s).match(/^([HG])(\d+)$/); return m ? `${m[1]}${m[2].padStart(4, '0')}${suf || ''}` : s; };
 function lexico(strong, suf) {
@@ -122,4 +154,4 @@ function ocorrencias(strong, limite = 300) {
   return { total, lista: prep('ocorr', 'SELECT l, c, v FROM ocorr WHERE s = ? ORDER BY l, c, v LIMIT ?').all(strong, limite) };
 }
 const disponivel = () => !!abrir();
-module.exports = { verso, lexico, ocorrencias, disponivel, morfGrego, morfHebraico, alinharPortugues, CREDITOS };
+module.exports = { ehOriginal, instalar, verso, lexico, ocorrencias, disponivel, morfGrego, morfHebraico, alinharPortugues, CREDITOS };

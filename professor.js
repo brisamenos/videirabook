@@ -181,7 +181,7 @@
   const tamanho = b => b > 1048576 ? `${(b / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.round((b || 0) / 1024)} KB`;
   VB.registrar(/^\/p\/modulos$/, 'professor', async () => {
     carregando('modulos'); document.title = 'Módulos bíblicos · VideiraBook';
-    const { padrao, lista, removidos } = await VB.api('/api/admin/biblioteca');
+    const { padrao, lista, removidos, original } = await VB.api('/api/admin/biblioteca');
     const bloco = (tipo, titulo, vazio) => {
       const itens = lista.filter(m => m.tipo === tipo);
       return `<section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .8rem">${titulo}</h3>
@@ -201,6 +201,9 @@
       ${bloco('biblia', 'Bíblias', 'Nenhuma Bíblia instalada.')}
       ${bloco('dicionario', 'Dicionários', 'Nenhum dicionário ainda. Importe um arquivo .dct.mybible do MySword (por exemplo, o Dicionário Wycliffe).')}
       ${bloco('comentario', 'Comentários', 'Nenhum comentário ainda. Importe arquivos .cmt.mybible do MySword. Eles aparecem no botão de cada versículo e entram na pesquisa dos sermões.')}
+      <section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .4rem">Hebraico e grego</h3>
+        ${original ? '<p style="margin:0" class="pequeno"><span class="etiqueta ok">Instalado</span> O texto original aparece na opção Hebraico/Grego de cada versículo.</p>'
+          : '<p style="margin:0" class="pequeno"><span class="etiqueta nova">Não instalado</span> Envie o arquivo <b>original.db</b> (ou <b>original.db.gz</b>) pelo botão Importar módulo.</p>'}</section>
       ${removidos.length ? `<p class="pequeno muted">Bíblias que vêm com o app e foram excluídas: ${removidos.map(esc).join(', ').toUpperCase()}. <button class="btn sec mini" id="restaurar">Restaurar</button></p>` : ''}
       <p class="pequeno muted">Aceita Bíblias (<b>.bbl.mybible</b>), dicionários (<b>.dct.mybible</b>) e comentários (<b>.cmt.mybible</b>) do MySword, e também módulos do MyBible. Títulos, epígrafes dos Salmos, palavras de Jesus em vermelho e notas de rodapé aparecem quando o módulo traz essas marcações.</p>`;
     $('#importar').addEventListener('click', () => $('#arq-modulo').click());
@@ -208,7 +211,7 @@
       const arq = e.target.files[0]; if (!arq) return;
       const caixa = $('#envio'); const txt = $('#envio-txt'); const barra = caixa.querySelector('.barra i');
       const aviso = (msg, ok) => { caixa.hidden = false; caixa.classList.toggle('envio-erro', !ok); caixa.classList.toggle('envio-ok', !!ok); txt.innerHTML = msg; if (barra) barra.parentElement.hidden = true; e.target.value = ''; };
-      if (!/\.(mybible|sqlite3?|db)$/i.test(arq.name)) return aviso(`<b>${esc(arq.name)}</b> não parece um módulo do MySword. Escolha um arquivo terminado em <b>.bbl.mybible</b>, <b>.dct.mybible</b> ou <b>.cmt.mybible</b>.`);
+      if (!/\.(mybible|sqlite3?|db|gz)$/i.test(arq.name)) return aviso(`<b>${esc(arq.name)}</b> não parece um módulo do MySword. Escolha um arquivo terminado em <b>.bbl.mybible</b>, <b>.dct.mybible</b> ou <b>.cmt.mybible</b>.`);
       const fd = new FormData(); fd.append('arquivo', arq, arq.name);
       caixa.hidden = false; caixa.classList.remove('envio-erro', 'envio-ok'); if (barra) { barra.parentElement.hidden = false; barra.style.width = '0%'; }
       txt.textContent = `Enviando ${arq.name} (${tamanho(arq.size)})…`;
@@ -220,7 +223,7 @@
         if (x.status === 401) return aviso('Sua sessão expirou. Entre de novo e repita a importação.');
         if (x.status >= 500 && !d.erro) return aviso(`O servidor não conseguiu terminar a importação (erro ${x.status}). Tente de novo; se continuar, veja os logs do app no EasyPanel.`);
         if (x.status >= 400 || !d.ok) return aviso(esc(d.erro || `Não foi possível importar o módulo (erro ${x.status}).`));
-        VB.toast(`${d.tipo === 'biblia' ? 'Bíblia importada' : d.tipo === 'comentario' ? 'Comentário importado' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
+        VB.toast(d.tipo === 'original' ? 'Texto hebraico e grego instalado' : `${d.tipo === 'biblia' ? 'Bíblia importada' : d.tipo === 'comentario' ? 'Comentário importado' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
         await VB.carregarBiblioteca(); VB.rota();
       };
       x.onerror = () => aviso('A conexão caiu durante o envio. Confira a internet e tente de novo.');

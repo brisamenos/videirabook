@@ -820,11 +820,15 @@ app.get('/api/modulos/:cod/imagem/:id', auth, h((req, res) => {
 }));
 // Professor: importar e organizar módulos
 P.get('/biblioteca', h((req, res) => {
-  res.json({ padrao: BIB.padrao(), removidos: String(getConfig().embutidos_removidos || '').split(',').filter(Boolean), lista: db.prepare('SELECT * FROM biblioteca ORDER BY tipo, ordem, id').all()
+  res.json({ original: require('./original').disponivel(), padrao: BIB.padrao(), removidos: String(getConfig().embutidos_removidos || '').split(',').filter(Boolean), lista: db.prepare('SELECT * FROM biblioteca ORDER BY tipo, ordem, id').all()
     .map(r => ({ ...r, arquivo: undefined, existe: fs.existsSync(BIB.caminho(r)) })) });
 }));
 P.post('/biblioteca', upload.single('arquivo'), h((req, res) => {
   if (!req.file) return res.status(400).json({ erro: 'Escolha o arquivo do módulo.' });
+  if (require('./original').ehOriginal(req.file.path)) {   // texto hebraico e grego (original.db)
+    try { require('./original').instalar(req.file.path); return res.json({ ok: true, tipo: 'original', titulo: 'Texto hebraico e grego' }); }
+    catch (e) { fs.promises.unlink(req.file.path).catch(() => {}); return res.status(500).json({ erro: `Não foi possível instalar o texto original: ${e.message}` }); }
+  }
   try { const r = BIB.importar(req.file.path, nomeOriginal(req.file)); res.json({ ok: true, ...r }); }
   catch (e) { console.error('[módulos] importação recusada:', nomeOriginal(req.file), '-', e.message); fs.promises.unlink(req.file.path).catch(() => {}); res.status(400).json({ erro: e.message }); }
 }));
