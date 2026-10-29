@@ -196,7 +196,7 @@
         : `<p class="muted" style="margin:0">${vazio}</p>`}</section>`;
     };
     $('#conteudo').innerHTML = `${cabecalho('Módulos bíblicos', 'Bíblias e dicionários no formato do MySword (.mybible), usados na leitura, na concordância e nos sermões.', `<button class="btn" id="importar">${icone.upload}Importar módulo</button>`)}
-      <input type="file" id="arq-modulo" accept=".mybible,.sqlite3,.SQLite3" hidden>
+      <input type="file" id="arq-modulo" hidden>
       <div id="envio" hidden class="painel" style="margin-bottom:16px"><p style="margin:0 0 .5rem" id="envio-txt">Enviando…</p>${VB.barra(0)}</div>
       ${bloco('biblia', 'Bíblias', 'Nenhuma Bíblia instalada.')}
       ${bloco('dicionario', 'Dicionários', 'Nenhum dicionário ainda. Importe um arquivo .dct.mybible do MySword (por exemplo, o Dicionário Wycliffe).')}
@@ -206,18 +206,25 @@
     $('#importar').addEventListener('click', () => $('#arq-modulo').click());
     $('#arq-modulo').addEventListener('change', e => {
       const arq = e.target.files[0]; if (!arq) return;
-      const fd = new FormData(); fd.append('arquivo', arq);
-      const caixa = $('#envio'); caixa.hidden = false; $('#envio-txt').textContent = `Enviando ${arq.name}…`;
-      const barra = caixa.querySelector('.barra i, .barra span, .barra > *');
-      const x = new XMLHttpRequest(); x.open('POST', '/api/admin/biblioteca');
-      x.upload.onprogress = ev => { if (ev.lengthComputable && barra) barra.style.width = `${Math.round(ev.loaded / ev.total * 100)}%`; if (ev.loaded === ev.total) $('#envio-txt').textContent = 'Conferindo o módulo…'; };
+      const caixa = $('#envio'); const txt = $('#envio-txt'); const barra = caixa.querySelector('.barra i');
+      const aviso = (msg, ok) => { caixa.hidden = false; caixa.classList.toggle('envio-erro', !ok); caixa.classList.toggle('envio-ok', !!ok); txt.innerHTML = msg; if (barra) barra.parentElement.hidden = true; e.target.value = ''; };
+      if (!/\.(mybible|sqlite3?|db)$/i.test(arq.name)) return aviso(`<b>${esc(arq.name)}</b> não parece um módulo do MySword. Escolha um arquivo terminado em <b>.bbl.mybible</b>, <b>.dct.mybible</b> ou <b>.cmt.mybible</b>.`);
+      const fd = new FormData(); fd.append('arquivo', arq, arq.name);
+      caixa.hidden = false; caixa.classList.remove('envio-erro', 'envio-ok'); if (barra) { barra.parentElement.hidden = false; barra.style.width = '0%'; }
+      txt.textContent = `Enviando ${arq.name} (${tamanho(arq.size)})…`;
+      const x = new XMLHttpRequest(); x.open('POST', '/api/admin/biblioteca'); x.timeout = 30 * 60 * 1000;
+      x.upload.onprogress = ev => { if (ev.lengthComputable && barra) barra.style.width = `${Math.round(ev.loaded / ev.total * 100)}%`; if (ev.loaded === ev.total) txt.textContent = 'Arquivo enviado. Conferindo o módulo…'; };
       x.onload = async () => {
         let d = {}; try { d = JSON.parse(x.responseText); } catch {}
-        if (x.status >= 400) { caixa.hidden = true; VB.toast(d.erro || 'Não foi possível importar o módulo.', true); e.target.value = ''; return; }
+        if (x.status === 413) return aviso(d.erro || `O servidor recusou o arquivo por ser grande demais (${tamanho(arq.size)}). No EasyPanel, aumente o limite de envio do domínio (body size) ou a variável UPLOAD_MAX_MB.`);
+        if (x.status === 401) return aviso('Sua sessão expirou. Entre de novo e repita a importação.');
+        if (x.status >= 500 && !d.erro) return aviso(`O servidor não conseguiu terminar a importação (erro ${x.status}). Tente de novo; se continuar, veja os logs do app no EasyPanel.`);
+        if (x.status >= 400 || !d.ok) return aviso(esc(d.erro || `Não foi possível importar o módulo (erro ${x.status}).`));
         VB.toast(`${d.tipo === 'biblia' ? 'Bíblia importada' : d.tipo === 'comentario' ? 'Comentário importado' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
         await VB.carregarBiblioteca(); VB.rota();
       };
-      x.onerror = () => { caixa.hidden = true; VB.toast('A conexão caiu durante o envio. Tente de novo.', true); };
+      x.onerror = () => aviso('A conexão caiu durante o envio. Confira a internet e tente de novo.');
+      x.ontimeout = () => aviso('O envio demorou demais e foi interrompido. Tente de novo numa conexão mais rápida.');
       x.send(fd);
     });
     const recarregar = async () => { await VB.carregarBiblioteca(); VB.rota(); };

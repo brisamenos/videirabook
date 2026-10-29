@@ -826,7 +826,7 @@ P.get('/biblioteca', h((req, res) => {
 P.post('/biblioteca', upload.single('arquivo'), h((req, res) => {
   if (!req.file) return res.status(400).json({ erro: 'Escolha o arquivo do módulo.' });
   try { const r = BIB.importar(req.file.path, nomeOriginal(req.file)); res.json({ ok: true, ...r }); }
-  catch (e) { fs.promises.unlink(req.file.path).catch(() => {}); res.status(400).json({ erro: e.message }); }
+  catch (e) { console.error('[módulos] importação recusada:', nomeOriginal(req.file), '-', e.message); fs.promises.unlink(req.file.path).catch(() => {}); res.status(400).json({ erro: e.message }); }
 }));
 P.put('/biblioteca/:cod', h((req, res) => {
   const r = BIB.porCod(req.params.cod); if (!r) return res.status(404).json({ erro: 'Módulo não encontrado.' });

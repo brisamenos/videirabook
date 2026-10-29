@@ -1,5 +1,5 @@
 /* VideiraBook — service worker: deixa o app abrir rápido e mostra um aviso quando estiver sem internet */
-const CACHE = 'videirabook-v8';
+const CACHE = 'videirabook-v9';
 const BASE = ['/', '/css/style.css?v=4', '/js/core.js?v=4', '/js/aluno.js?v=4', '/js/professor.js?v=4', '/img/logo.svg',
   '/icon-192.png', '/fonts/newsreader-latin-opsz-normal.woff2', '/fonts/newsreader-latin-opsz-italic.woff2', '/fonts/figtree-latin-wght-normal.woff2'];
 

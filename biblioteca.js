@@ -144,7 +144,8 @@ function importar(arquivoTemp, nomeOriginal) {
   let cod = slug(sigla) || 'mod'; const raiz = cod; let n = 2;
   while (porCod(cod)) cod = `${raiz}${n++}`;
   const destino = `${cod}-${Date.now()}.mybible`;
-  fs.renameSync(arquivoTemp, path.join(PASTA_DADOS, destino));
+  try { fs.renameSync(arquivoTemp, path.join(PASTA_DADOS, destino)); }
+  catch (e) { if (e.code !== 'EXDEV') throw e; fs.copyFileSync(arquivoTemp, path.join(PASTA_DADOS, destino)); fs.unlinkSync(arquivoTemp); }
   const ordem = (db.prepare('SELECT MAX(ordem) m FROM biblioteca WHERE tipo = ?').get(info.tipo).m || 0) + 1;
   const titulo = info.titulo && !/^©/.test(info.titulo) ? info.titulo : (info.descricao || base);
   const creditos = info.editora || info.autor || (/ - /.test(titulo) ? titulo.split(' - ').pop() : '') || (/©/.test(info.titulo) ? info.titulo : '') || (/©/.test(info.comentarios) ? info.comentarios.slice(0, 160) : '');

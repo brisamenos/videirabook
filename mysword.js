@@ -34,6 +34,10 @@ function tabelas(d) { return d.prepare("SELECT name FROM sqlite_master WHERE typ
 function temTabela(ts, nome) { return ts.find(t => t.toLowerCase() === nome.toLowerCase()); }
 
 function identificar(arquivo) {
+  try {
+    const fd = require('fs').openSync(arquivo, 'r'); const b = Buffer.alloc(16); require('fs').readSync(fd, b, 0, 16, 0); require('fs').closeSync(fd);
+    if (b.toString('latin1') !== 'SQLite format 3\u0000') throw new Error('x');
+  } catch { throw new Error('Este arquivo não é um módulo do MySword. Pode ser que o download não terminou ou que ele esteja compactado (.zip): extraia e envie o arquivo .mybible.'); }
   let d;
   try { d = new Database(arquivo, { readonly: true, fileMustExist: true }); } catch { throw new Error('O arquivo não é um módulo válido (não abriu como banco SQLite).'); }
   try {
