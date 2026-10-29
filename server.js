@@ -761,6 +761,35 @@ app.get('/api/biblia/:livro/:cap', auth, h((req, res) => {
   res.set('Cache-Control', 'private, max-age=3600');
   res.json(c);
 }));
+// Hebraico e grego palavra por palavra
+const ORIG = require('./original');
+app.get('/api/original/lexico/:strong', auth, h((req, res) => {
+  const l = ORIG.lexico(String(req.params.strong).replace(/[^HG0-9]/g, ''), String(req.query.suf || '').replace(/[^A-Za-z]/g, '').slice(0, 2));
+  if (!l) return res.status(404).json({ erro: 'Palavra não encontrada no léxico.' });
+  res.set('Cache-Control', 'private, max-age=86400'); res.json(l);
+}));
+app.get('/api/original/ocorrencias/:strong', auth, h((req, res) => {
+  const s = String(req.params.strong).replace(/[^HG0-9]/g, '');
+  const o = ORIG.ocorrencias(s, 300);
+  const versao = String(req.query.v || BIB.padrao());
+  const cache = new Map();
+  const lista = o.lista.map(x => {
+    const k = `${x.l}.${x.c}`;
+    if (!cache.has(k)) cache.set(k, BIB.trecho(versao, x.l, x.c, 1, 0));
+    const t = cache.get(k); const linha = t && t.linhas.find(y => y[0] === x.v);
+    return { ...x, t: linha ? linha[1] : '' };
+  });
+  res.json({ total: o.total, lista, sigla: (BIB.trecho(versao, 0, 1, 1, 1) || {}).sigla || '' });
+}));
+app.get('/api/original/:livro/:cap/:verso', auth, h((req, res) => {
+  const l = Number(req.params.livro), c = Number(req.params.cap), v = Number(req.params.verso);
+  if (!ORIG.disponivel()) return res.status(404).json({ erro: 'O texto original não está instalado no servidor.' });
+  const b = BIB.brutoComStrong(l, c, v);
+  const r = ORIG.verso(l, c, v, b.texto);
+  if (!r) return res.status(404).json({ erro: 'Este versículo não foi encontrado no texto original.' });
+  res.set('Cache-Control', 'private, max-age=3600');
+  res.json({ ...r, siglaPt: b.sigla });
+}));
 app.get('/api/comentarios/:livro/:cap/marcas', auth, h((req, res) => {
   res.json(BIB.versosComentados(Number(req.params.livro), Number(req.params.cap)));
 }));

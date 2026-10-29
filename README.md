@@ -65,6 +65,13 @@ Em **Módulos bíblicos**, o professor importa Bíblias (`.bbl.mybible`), dicion
 - Os alunos ganham **Dicionário** e **Concordância** (busca de palavra ou frase) dentro da área Bíblia.
 - ARA, ACF, NVI, NVT, KJF e Almeida 1819 já vêm com o app, na pasta `modulos/biblias`.
 
+## Hebraico e grego
+
+O botão de cada versículo tem a opção **Hebraico** (Antigo Testamento) ou **Grego** (Novo Testamento). Ela mostra o texto original palavra por palavra: transliteração, número de Strong, análise gramatical em português, a palavra correspondente na ARA, o léxico e todas as ocorrências da mesma palavra na Bíblia.
+
+- No grego dá para alternar entre a Nestle-Aland 28 (texto crítico mais recente) e o Texto Recebido (base da ACF e da KJF).
+- Os dados ficam em `modulos/originais/original.db`. Eles vêm do STEP Bible (Tyndale House, Cambridge), sob licença CC BY 4.0.
+
 ## Sermões com IA
 
 Em **Sermões com IA**, o professor salva a chave da OpenAI, escolhe o modelo, define um limite diário por pessoa e marca quem pode usar a ferramenta. Ele sempre tem acesso.
@@ -72,6 +79,7 @@ Em **Sermões com IA**, o professor salva a chave da OpenAI, escolhe o modelo, d
 - O pregador escolhe o tipo de sermão (textual, temático, histórico ou expositivo), o texto base, o público, a ocasião e a duração.
 - A IA recebe o texto bíblico real do módulo escolhido, os verbetes do dicionário e só as frases cadastradas pelo professor.
 - Depois o pregador ajusta o sermão conversando com a IA. As referências bíblicas abrem o versículo ao toque.
+- Para quem tem a IA liberada, o **Contexto**, a **Concordância** e o **Estudo das palavras originais** de cada versículo também são gerados pela IA. Cada resultado fica guardado e é reaproveitado por todos, sem novo custo; o professor pode pedir para gerar de novo.
 - Há também modo púlpito (tela cheia, letra grande), cópia, impressão e edição manual.
 
 ## Regras de liberação

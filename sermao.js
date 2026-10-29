@@ -17,45 +17,14 @@
   };
 
   // ── Markdown simples → HTML (títulos, listas, negrito, itálico, citações)
-  function md(texto) {
-    const linhas = String(texto || '').replace(/\r/g, '').split('\n');
-    const inl = s => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/_([^_\n]+)_/g, '<em>$1</em>');
-    let html = '', lista = null, par = [];
-    const fechaPar = () => { if (par.length) { html += `<p>${par.map(inl).join('<br>')}</p>`; par = []; } };
-    const fechaLista = () => { if (lista) { html += `</${lista}>`; lista = null; } };
-    for (const bruto of linhas) {
-      const l = bruto.trimEnd(); let m;
-      if (!l.trim()) { fechaPar(); fechaLista(); continue; }
-      if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { fechaPar(); fechaLista(); const n = Math.min(4, m[1].length + 0); html += `<h${n}>${inl(m[2])}</h${n}>`; continue; }
-      if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { fechaPar(); fechaLista(); html += '<hr>'; continue; }
-      if ((m = l.match(/^\s*>\s?(.*)$/))) { fechaPar(); fechaLista(); html += `<blockquote>${inl(m[1])}</blockquote>`; continue; }
-      if ((m = l.match(/^\s*([IVXLC]+)\.\s+(.*)$/))) { fechaPar(); fechaLista(); html += `<p class="ponto"><span class="romano">${m[1]}.</span> ${inl(m[2])}</p>`; continue; }
-      if ((m = l.match(/^(\s*)[-*•]\s+(.*)$/))) { fechaPar(); if (lista !== 'ul') { fechaLista(); html += '<ul>'; lista = 'ul'; } html += `<li${m[1].length >= 2 ? ' class="sub"' : ''}>${inl(m[2])}</li>`; continue; }
-      if ((m = l.match(/^\s*(\d+)[.)]\s+(.*)$/))) { fechaPar(); if (lista !== 'ol') { fechaLista(); html += '<ol>'; lista = 'ol'; } html += `<li>${inl(m[2])}</li>`; continue; }
-      fechaLista(); par.push(l.trim());
-    }
-    fechaPar(); fechaLista();
-    return html;
-  }
+  const md = VB.md;
   const textoLimpo = t => String(t || '').replace(/^#+\s*/gm, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1$2');
   function desenharDoc(el, texto, escrevendo) {
     el.innerHTML = md(texto) + (escrevendo ? '<span class="cursor-ia" aria-hidden="true"></span>' : '');
     VB.linkarReferencias(el);
   }
   // Lê a resposta da IA aos pedaços
-  async function fluxo(url, corpo, aoChegar) {
-    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(corpo || {}) });
-    if (!r.ok) { let m = 'Não foi possível falar com a IA agora.'; try { m = (await r.json()).erro || m; } catch {} throw new Error(m); }
-    const leitor = r.body.getReader(); const dec = new TextDecoder(); let texto = '';
-    for (;;) {
-      const { done, value } = await leitor.read(); if (done) break;
-      texto += dec.decode(value, { stream: true });
-      const i = texto.indexOf('\u0000ERRO:');
-      if (i >= 0) { aoChegar(texto.slice(0, i)); throw new Error(texto.slice(i + 6)); }
-      aoChegar(texto);
-    }
-    return texto;
-  }
+  const fluxo = VB.fluxo;
   const parseRef = txt => {
     const m = String(txt || '').trim().match(/^([123]?\s?[\p{L}]+)\.?\s*(\d{1,3})(?:\s*[.:]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?)?\s*$/u);
     if (!m) return null;

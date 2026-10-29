@@ -256,6 +256,13 @@ function versosComentados(arquivo, formato, livro0, cap) {
   return set;
 }
 
+function versoBruto(arquivo, formato, livro0, cap, verso) {
+  const d = abrir(arquivo);
+  if (formato === 'mybible') { const r = d.prepare('SELECT text AS t FROM verses WHERE book_number = ? AND chapter = ? AND verse = ?').get(MYBIBLE_LIVROS[livro0], cap, verso); return r ? r.t : ''; }
+  const t = temTabela(tabelas(d), 'Bible');
+  const r = d.prepare(`SELECT Scripture AS t FROM "${t}" WHERE Book = ? AND Chapter = ? AND Verse = ?`).get(livro0 + 1, cap, verso); return r ? r.t : '';
+}
+
 function imagem(arquivo, id) {
   const d = abrir(arquivo);
   if (!temTabela(tabelas(d), 'data')) return null;
@@ -299,4 +306,4 @@ function htmlVerbete(bruto, cod) {
   return html;
 }
 
-module.exports = { identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };
+module.exports = { versoBruto, identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };

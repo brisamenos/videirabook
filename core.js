@@ -333,6 +333,41 @@ window.VB = (function () {
       return `${tit}<p id="v${n}"${cls ? ` class="${cls}"` : ''}><sup>${n}</sup>${t}${ac}</p>${c}`;
     }).join('');
   };
+  // ── Markdown simples e leitura da resposta da IA aos pedaços (usados em vários lugares)
+  VB.md = function md(texto) {
+    const linhas = String(texto || '').replace(/\r/g, '').split('\n');
+    const inl = s => esc(s).replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>').replace(/_([^_\n]+)_/g, '<em>$1</em>');
+    let html = '', lista = null, par = [];
+    const fechaPar = () => { if (par.length) { html += `<p>${par.map(inl).join('<br>')}</p>`; par = []; } };
+    const fechaLista = () => { if (lista) { html += `</${lista}>`; lista = null; } };
+    for (const bruto of linhas) {
+      const l = bruto.trimEnd(); let m;
+      if (!l.trim()) { fechaPar(); fechaLista(); continue; }
+      if ((m = l.match(/^(#{1,4})\s+(.*)$/))) { fechaPar(); fechaLista(); const n = Math.min(4, m[1].length + 0); html += `<h${n}>${inl(m[2])}</h${n}>`; continue; }
+      if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { fechaPar(); fechaLista(); html += '<hr>'; continue; }
+      if ((m = l.match(/^\s*>\s?(.*)$/))) { fechaPar(); fechaLista(); html += `<blockquote>${inl(m[1])}</blockquote>`; continue; }
+      if ((m = l.match(/^\s*([IVXLC]+)\.\s+(.*)$/))) { fechaPar(); fechaLista(); html += `<p class="ponto"><span class="romano">${m[1]}.</span> ${inl(m[2])}</p>`; continue; }
+      if ((m = l.match(/^(\s*)[-*•]\s+(.*)$/))) { fechaPar(); if (lista !== 'ul') { fechaLista(); html += '<ul>'; lista = 'ul'; } html += `<li${m[1].length >= 2 ? ' class="sub"' : ''}>${inl(m[2])}</li>`; continue; }
+      if ((m = l.match(/^\s*(\d+)[.)]\s+(.*)$/))) { fechaPar(); if (lista !== 'ol') { fechaLista(); html += '<ol>'; lista = 'ol'; } html += `<li>${inl(m[2])}</li>`; continue; }
+      fechaLista(); par.push(l.trim());
+    }
+    fechaPar(); fechaLista();
+    return html;
+  };
+  VB.fluxo = async function fluxo(url, corpo, aoChegar) {
+    const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(corpo || {}) });
+    if (!r.ok) { let m = 'Não foi possível falar com a IA agora.'; try { m = (await r.json()).erro || m; } catch {} throw new Error(m); }
+    const leitor = r.body.getReader(); const dec = new TextDecoder(); let texto = '';
+    for (;;) {
+      const { done, value } = await leitor.read(); if (done) break;
+      texto += dec.decode(value, { stream: true });
+      const i = texto.indexOf('\u0000ERRO:');
+      if (i >= 0) { aoChegar(texto.slice(0, i)); throw new Error(texto.slice(i + 6)); }
+      aoChegar(texto);
+    }
+    return texto;
+  };
+
   // ── Menu de cada versículo: contexto, comentários, concordância, gerar mensagem, copiar
   const PARADAS_V = new Set('para pelo pela pelos pelas como mais mas que quem qual quais quando onde entre sobre este esta estes estas esse essa esses essas aquele aquela isto isso seu sua seus suas meu minha meus minhas teu tua nosso nossa vosso vossa lhe lhes eles elas ele ela todo toda todos todas pois porque porém então assim também ainda não nem seja será foram eram estava está estão tinha havia disse diz fazer feito sendo tendo tem hoje agora depois antes sempre aqui eis tão tanto grande vós nós'.split(' '));
   const refVerso = (l, cap, v) => `${VB.LIVROS[l][1]} ${cap}.${v}`;
@@ -346,6 +381,7 @@ window.VB = (function () {
       ['contexto', 'Contexto', '<path d="M4 6h16M4 12h10M4 18h16"/>'],
       ['comentarios', `Ver comentários${btn.classList.contains('tem-com') ? '' : ''}`, '<path d="M4 5h16v11H8l-4 4z"/>'],
       ['concordancia', 'Concordância', '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'],
+      ['original', l < 39 ? 'Hebraico' : 'Grego', '<path d="M5 19V5h9a4 4 0 010 8H5"/><path d="M13 13l6 6"/>'],
       ...(VB.me && VB.me.ia ? [['sermao', 'Gerar mensagem', '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>']] : []),
       ['copiar', 'Copiar versículo', '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>'],
     ];
@@ -365,6 +401,7 @@ window.VB = (function () {
       if (op === 'contexto') return VB.contextoVerso(l, cap, v, versao);
       if (op === 'comentarios') return VB.comentariosVerso(l, cap, v);
       if (op === 'concordancia') return VB.concordanciaVerso(l, cap, v, versao, texto);
+      if (op === 'original') return VB.originalVerso(l, cap, v, versao);
       if (op === 'sermao') { location.hash = `#/sermoes/novo?ref=${encodeURIComponent(refVerso(l, cap, v))}`; return; }
       if (op === 'copiar') {
         const sigla = (VB.VERSOES.find(x => x[0] === versao) || [, ''])[1];
@@ -378,22 +415,43 @@ window.VB = (function () {
     if (!e.target.closest('.menu-verso')) fecharMenuVerso();
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharMenuVerso(); });
-  addEventListener('hashchange', fecharMenuVerso);
+  addEventListener('hashchange', () => { fecharMenuVerso(); const r = document.getElementById('modal-raiz'); if (r && r.firstElementChild) r.innerHTML = ''; });   // trocou de tela: fecha janelas abertas
 
-  // Contexto: versículos ao redor, título da seção e o verbete do livro no dicionário
+  // Parte da IA dentro de uma janela (contexto, concordância, estudo das palavras): usa o que já foi gerado, se houver
+  VB.blocoIA = function (caixa, tipo, l, cap, v, versao) {
+    caixa.innerHTML = `<div class="ia-bloco"><div class="ia-cab"><span class="ia-selo">${VB.icone.faisca}IA</span><span class="pequeno muted" data-ia-status>Preparando…</span>
+      ${VB.me.papel === 'professor' ? '<button type="button" class="btn sec mini" data-ia-refazer hidden>Gerar de novo</button>' : ''}</div><div class="leitura ia-texto" data-ia-texto></div></div>`;
+    const alvo = caixa.querySelector('[data-ia-texto]'), status = caixa.querySelector('[data-ia-status]'), refazer = caixa.querySelector('[data-ia-refazer]');
+    let t = 0;
+    const rodar = async (refaz) => {
+      status.textContent = 'A IA está escrevendo…'; alvo.innerHTML = '<span class="cursor-ia"></span>'; if (refazer) refazer.hidden = true;
+      try {
+        const txt = await VB.fluxo('/api/ia/verso', { tipo, livro: l, cap, verso: v, versao, refazer: !!refaz }, parcial => {
+          const n = Date.now(); if (n - t < 90) return; t = n; alvo.innerHTML = VB.md(parcial) + '<span class="cursor-ia"></span>'; VB.linkarReferencias(alvo);
+        });
+        alvo.innerHTML = VB.md(txt); VB.linkarReferencias(alvo);
+        status.textContent = 'Gerado por IA a partir do texto bíblico, do original e dos módulos instalados. Confira as referências.';
+        if (refazer) refazer.hidden = false;
+      } catch (e) { alvo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; status.textContent = ''; }
+    };
+    if (refazer) refazer.addEventListener('click', () => rodar(true));
+    rodar(false);
+  };
+
+  // Contexto: explicação da IA (quem tem acesso) + versículos ao redor + verbete do livro
   VB.contextoVerso = async function (l, cap, v, versao) {
     const livro = VB.LIVROS[l];
-    const m = VB.modal({ titulo: `Contexto de ${esc(livro[0])} ${cap}.${v}`, largo: true, corpo: '<div class="carregando" style="min-height:140px"></div>',
+    const m = VB.modal({ titulo: `Contexto de ${esc(livro[0])} ${cap}.${v}`, largo: true, corpo: '<div id="ctx-ia"></div><div id="ctx-texto"><div class="carregando" style="min-height:140px"></div></div><div id="ctx-livro"></div>',
       rodape: `<a class="btn sec" href="${VB.rotaBiblia(livro, cap, v)}" data-fechar>Ler o capítulo</a><button class="btn" data-fechar>Fechar</button>` });
     const corpo = m.el.querySelector('.modal-corpo');
+    if (VB.me && VB.me.ia) VB.blocoIA(corpo.querySelector('#ctx-ia'), 'contexto', l, cap, v, versao);
     try {
       const d = await VB.api(`/api/biblia/${l}/${cap}?v=${versao}`);
       const ini = Math.max(1, v - 4), fim = Math.min(d.versos.length, v + 4);
       let titulo = ''; for (let n = v; n >= 1; n--) if (d.titulos && d.titulos[n]) { titulo = d.titulos[n]; break; }
-      let html = `<p class="pequeno muted" style="margin:0 0 .4rem">${titulo ? `Seção: <b>${esc(titulo)}</b> · ` : ''}${esc(livro[0])} ${cap}.${ini}-${fim} (${esc(d.sigla)})</p>
+      const caixaTexto = corpo.querySelector('#ctx-texto');
+      caixaTexto.innerHTML = `${VB.me && VB.me.ia ? '<h3 class="ctx-sub">Os versículos ao redor</h3>' : ''}<p class="pequeno muted" style="margin:0 0 .4rem">${titulo ? `Seção: <b>${esc(titulo)}</b> · ` : ''}${esc(livro[0])} ${cap}.${ini}-${fim} (${esc(d.sigla)})</p>
         <div class="leitura biblia-texto popup-versos" style="max-height:none">${VB.htmlVersos(d, { ini, fim, destaque: v })}</div>`;
-      html += '<div id="ctx-livro"></div>';
-      corpo.innerHTML = html;
       const dic = VB.DICIONARIOS[0];
       if (dic) {
         const nome = livro[0].replace(/^[123]\s+/, '');
@@ -411,7 +469,7 @@ window.VB = (function () {
           box.querySelector('.ver-verbete').addEventListener('click', () => m.fechar());
         }
       }
-    } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+    } catch (e) { corpo.querySelector('#ctx-texto').innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
   };
   // Comentários importados sobre o versículo (ou sobre o capítulo)
   VB.comentariosVerso = async function (l, cap, v) {
@@ -430,14 +488,85 @@ window.VB = (function () {
       VB.prepararVerbete(corpo);
     } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
   };
-  // Concordância a partir das palavras do versículo
-  VB.concordanciaVerso = function (l, cap, v, versao, texto) {
+  // Concordância: IA escolhe versículos relacionados entre os que têm as mesmas palavras no original
+  VB.concordanciaVerso = async function (l, cap, v, versao, texto) {
     const palavras = [...new Set((texto.match(/[\p{L}-]{4,}/gu) || []).filter(w => !PARADAS_V.has(VB.normalizar(w))).map(w => w.toLowerCase()))].slice(0, 14);
-    const m = VB.modal({ titulo: `Concordância · ${esc(VB.LIVROS[l][0])} ${cap}.${v}`, corpo: `<p class="muted" style="margin-top:0">Toque numa palavra para ver todos os versículos em que ela aparece, ou escreva uma expressão.</p>
+    const m = VB.modal({ titulo: `Concordância · ${esc(VB.LIVROS[l][0])} ${cap}.${v}`, largo: !!(VB.me && VB.me.ia), corpo: `<div id="conc-ia"></div>
+      <h3 class="ctx-sub" style="${VB.me && VB.me.ia ? '' : 'border:0;padding-top:0;margin-top:0'}">Palavras do versículo</h3>
+      <p class="muted pequeno" style="margin-top:0">Toque numa palavra para ver todos os versículos em que ela aparece, ou escreva uma expressão.</p>
       <div class="chips-palavras">${palavras.map(w => `<a href="#/concordancia/${versao}/${encodeURIComponent(w)}" data-fechar>${esc(w)}</a>`).join('')}</div>
-      <form id="f-conc-v" style="display:flex;gap:8px;margin-top:14px"><input class="input" name="q" minlength="3" required placeholder="Ex.: fruto do Espírito" aria-label="Palavra ou expressão"><button class="btn" type="submit">Procurar</button></form>`,
+      <form id="f-conc-v" style="display:flex;gap:8px;margin-top:14px"><input class="input" name="q" minlength="3" required placeholder="Ex.: fruto do Espírito" aria-label="Palavra ou expressão"><button class="btn" type="submit">Procurar</button></form>
+      <div id="conc-orig"></div>`,
       rodape: '<button class="btn sec" data-fechar>Fechar</button>' });
     m.el.querySelector('#f-conc-v').addEventListener('submit', e => { e.preventDefault(); const q = e.target.q.value.trim(); if (q.length < 3) return; m.fechar(); location.hash = `#/concordancia/${versao}/${encodeURIComponent(q)}`; });
+    if (VB.me && VB.me.ia) VB.blocoIA(m.el.querySelector('#conc-ia'), 'concordancia', l, cap, v, versao);
+    try {
+      const o = await VB.api(`/api/original/${l}/${cap}/${v}`);
+      const vistos = new Set();
+      const chaves = o.palavras.filter(w => w.s && w.ocorr > 1 && w.ocorr < 3000 && !/^(T|C|R|S)|^(CONJ|PREP|PRT)|^[TPRCDKIXQFS]-/.test(w.m) && !vistos.has(w.s) && vistos.add(w.s));
+      if (chaves.length) {
+        const box = m.el.querySelector('#conc-orig');
+        box.innerHTML = `<h3 class="ctx-sub">No ${o.lingua} (concordância exata)</h3><p class="muted pequeno" style="margin-top:0">Mostra todos os versículos com a mesma palavra no texto original, mesmo quando a tradução usa palavras diferentes.</p>
+          <div class="chips-palavras orig">${chaves.map(w => `<button type="button" data-strong="${w.s}" data-lema="${esc(w.lema || w.o)}"><span class="o ${o.lingua}">${esc(w.lema || w.o)}</span> ${esc(w.pt || w.sentido)} <small>${w.ocorr}×</small></button>`).join('')}</div>`;
+        box.querySelectorAll('[data-strong]').forEach(b => b.addEventListener('click', () => VB.ocorrenciasStrong(b.dataset.strong, b.dataset.lema, versao)));
+      }
+    } catch { /* sem texto original */ }
+  };
+  // Todas as ocorrências de uma palavra do original (por número de Strong)
+  VB.ocorrenciasStrong = async function (strong, lema, versao) {
+    const m = VB.modal({ titulo: `${esc(lema)} <small class="muted pequeno">${esc(strong)}</small>`, largo: true, corpo: '<div class="carregando" style="min-height:140px"></div>', rodape: '<button class="btn" data-fechar>Fechar</button>' });
+    const corpo = m.el.querySelector('.modal-corpo');
+    try {
+      const [r, lx] = await Promise.all([VB.api(`/api/original/ocorrencias/${strong}?v=${versao || VB.bibliaPadrao}`), VB.api(`/api/original/lexico/${strong}`).catch(() => null)]);
+      corpo.innerHTML = `${lx ? `<div class="lex-caixa"><p><span class="o ${strong[0] === 'H' ? 'hebraico' : 'grego'}" style="font-size:1.6rem">${esc(lx.lema)}</span> <i>${esc((lx.translit || '').replace(/\./g, ''))}</i> — ${esc(lx.gloss)}</p>
+        <details><summary class="pequeno">Definição do léxico (em inglês)</summary><p class="pequeno lex-def">${esc(lx.def || '').replace(/\n/g, '<br>')}</p></details></div>` : ''}
+        <p class="pequeno muted">${r.total} ocorrência${r.total === 1 ? '' : 's'} no ${strong[0] === 'H' ? 'Antigo' : 'Novo'} Testamento${r.total > r.lista.length ? ` (mostrando ${r.lista.length})` : ''} · texto em português: ${esc(r.sigla)}</p>
+        ${r.lista.map(x => `<p class="conc-item"><a class="ref-biblia" data-livro="${x.l}" data-cap="${x.c}" data-ini="${x.v}" data-fim="${x.v}" href="${VB.rotaBiblia(VB.LIVROS[x.l], x.c, x.v)}">${esc(VB.LIVROS[x.l][1])} ${x.c}.${x.v}</a> ${esc(x.t)}</p>`).join('')}`;
+      VB.linkarReferencias(corpo.querySelector('.lex-caixa') || corpo);
+    } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+  };
+  // Hebraico / grego palavra por palavra
+  VB.originalVerso = async function (l, cap, v, versao) {
+    const livro = VB.LIVROS[l];
+    const m = VB.modal({ titulo: `${l < 39 ? 'Hebraico' : 'Grego'} · ${esc(livro[0])} ${cap}.${v}`, largo: true, corpo: '<div class="carregando" style="min-height:160px"></div>',
+      rodape: `${VB.me && VB.me.ia ? `<button class="btn sec" id="orig-ia">${VB.icone.faisca}Estudo das palavras com IA</button>` : ''}<button class="btn" data-fechar>Fechar</button>` });
+    const corpo = m.el.querySelector('.modal-corpo');
+    try {
+      const o = await VB.api(`/api/original/${l}/${cap}/${v}`);
+      let texto = VB.pref.get('texto_grego', 'NA');
+      const desenhar = () => {
+        const pal = o.lingua === 'grego' ? o.palavras.filter(w => texto === 'TR' ? w.ed.includes('T') : w.ed.includes('N')) : o.palavras;
+        corpo.innerHTML = `${o.lingua === 'grego' ? `<div class="abas-texto" role="radiogroup" aria-label="Texto grego">
+            <button type="button" role="radio" data-t="NA" aria-checked="${texto === 'NA'}">Nestle-Aland 28 (texto crítico)</button><button type="button" role="radio" data-t="TR" aria-checked="${texto === 'TR'}">Texto Recebido (base da ACF e KJF)</button></div>` : ''}
+          <p class="linha-original ${o.lingua}" dir="${o.lingua === 'hebraico' ? 'rtl' : 'ltr'}" lang="${o.lingua === 'hebraico' ? 'he' : 'grc'}">${pal.map(w => esc(w.o)).join(' ')}</p>
+          <div class="palavras-orig" dir="${o.lingua === 'hebraico' ? 'rtl' : 'ltr'}">${pal.map((w, i) => `<button type="button" class="palavra-orig" data-i="${i}" dir="ltr">
+            <span class="o ${o.lingua}" lang="${o.lingua === 'hebraico' ? 'he' : 'grc'}">${esc(w.o)}</span><span class="tr">${esc(w.t)}</span>
+            <span class="pt">${esc(w.pt || '—')}</span><span class="st">${esc(w.s)}${w.ocorr ? ` · ${w.ocorr}×` : ''}</span></button>`).join('')}</div>
+          <div id="orig-detalhe" class="orig-detalhe" hidden></div>
+          <div id="orig-ia-caixa"></div>
+          <p class="pequeno muted" style="margin-top:1rem">Toque numa palavra para ver o léxico e as outras ocorrências. Português alinhado pela ${esc(o.siglaPt || 'Bíblia com Strong')}. ${esc(o.creditos)}</p>`;
+        corpo.querySelectorAll('[data-t]').forEach(b => b.addEventListener('click', () => { texto = b.dataset.t; VB.pref.set('texto_grego', texto); desenhar(); }));
+        corpo.querySelectorAll('.palavra-orig').forEach(b => b.addEventListener('click', async () => {
+          corpo.querySelectorAll('.palavra-orig').forEach(x => x.classList.toggle('ativa', x === b));
+          const w = pal[Number(b.dataset.i)]; const box = corpo.querySelector('#orig-detalhe'); box.hidden = false;
+          box.innerHTML = `<div class="carregando" style="min-height:60px"></div>`;
+          let lx = null; try { lx = await VB.api(`/api/original/lexico/${w.s}?suf=${encodeURIComponent(w.suf || '')}`); } catch {}
+          box.innerHTML = `<p style="margin:0 0 .4rem"><span class="o ${o.lingua}" style="font-size:1.7rem">${esc(w.o)}</span> <i>${esc(w.t)}</i></p>
+            <dl class="orig-dados"><dt>Forma de dicionário</dt><dd><span class="o ${o.lingua}">${esc(w.lema || (lx && lx.lema) || '')}</span> ${esc(w.lemaT || '')}</dd>
+            <dt>Strong</dt><dd>${esc(w.s)}${w.suf ? esc(w.suf) : ''}</dd><dt>Gramática</dt><dd>${esc(w.morf || w.m)}</dd>
+            <dt>Em português (${esc(o.siglaPt || '—')})</dt><dd>${esc(w.pt || '—')}</dd><dt>Sentido</dt><dd>${esc(w.sentido || w.g)} <small class="muted">(léxico em inglês)</small></dd>
+            ${o.lingua === 'grego' ? `<dt>Aparece em</dt><dd>${w.ed.includes('N') ? 'Nestle-Aland 28' : ''}${w.ed === 'NT' ? ' e ' : ''}${w.ed.includes('T') ? 'Texto Recebido' : ''}</dd>` : ''}</dl>
+            ${lx && lx.def ? `<details><summary class="pequeno">Definição completa do léxico (em inglês)</summary><p class="pequeno lex-def">${esc(lx.def).replace(/\n/g, '<br>')}</p></details>` : ''}
+            ${w.ocorr > 1 ? `<button type="button" class="btn sec mini" id="ver-ocorr">Ver as ${w.ocorr} ocorrências na Bíblia</button>` : ''}`;
+          VB.linkarReferencias(box);
+          const vo = box.querySelector('#ver-ocorr'); if (vo) vo.addEventListener('click', () => VB.ocorrenciasStrong(w.s, w.lema || w.o, versao));
+          box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }));
+      };
+      desenhar();
+      const bIA = m.el.querySelector('#orig-ia');
+      if (bIA) bIA.addEventListener('click', () => { bIA.disabled = true; const cx = corpo.querySelector('#orig-ia-caixa'); VB.blocoIA(cx, 'palavras', l, cap, v, versao); cx.scrollIntoView({ block: 'start', behavior: 'smooth' }); });
+    } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; const b = m.el.querySelector('#orig-ia'); if (b) b.remove(); }
   };
 
   // Verbete de dicionário numa janela (usado fora da tela do dicionário)

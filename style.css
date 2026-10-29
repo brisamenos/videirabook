@@ -824,3 +824,51 @@ html[data-tema="noite"] .menu-verso button:hover { background: #24402F; }
 html[data-tema="noite"] .bloco-com { background: #1A241D; border-color: #2E4234; }
 html[data-tema="noite"] .chips-palavras a { background: #24402F; color: #BFD8B0; }
 @media print { .acao-verso, .menu-verso { display: none !important; } }
+
+/* IA nos versículos */
+.ia-bloco { border: 1px solid var(--linha); border-radius: 14px; padding: 16px 18px; background: linear-gradient(180deg, var(--ouro-claro), transparent 120px), var(--papel); margin-bottom: 6px; }
+.ia-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: .6rem; }
+.ia-cab [data-ia-refazer] { margin-left: auto; }
+.ia-selo { display: inline-flex; align-items: center; gap: 5px; font: 700 .72rem var(--sans); color: #7A5524; background: #F6EBD3; border-radius: 999px; padding: 3px 10px 3px 7px; }
+.ia-selo svg { width: 14px; height: 14px; }
+.ia-texto { font-size: calc(1.02rem * var(--escala-leitura, 1)); }
+.ia-texto h2 { font-size: 1.15em; margin: 1.1rem 0 .4rem; color: var(--vinho-2); }
+.ia-texto h3 { font-size: 1.05em; margin: 1rem 0 .35rem; }
+.ia-texto p { margin: 0 0 .7rem; }
+.ia-texto ul { margin: 0 0 .8rem; padding-left: 1.2rem; }
+.ia-texto li { margin-bottom: .3rem; }
+html[data-tema="noite"] .ia-bloco { background: linear-gradient(180deg, #2B2A1E, transparent 120px), #1A241D; border-color: #2E4234; }
+html[data-tema="noite"] .ia-selo { background: #4A3B1F; color: #EDD29A; }
+
+/* Hebraico e grego */
+.o { font-family: "SBL Hebrew", "Ezra SIL", "SBL Greek", "Gentium Plus", "Times New Roman", "Noto Serif", serif; font-style: normal; }
+.o.hebraico { font-size: 1.35em; line-height: 1.4; }
+.linha-original { font-size: 1.55rem; line-height: 1.9; margin: .3rem 0 1rem; padding: 12px 16px; background: var(--vinho-claro); border-radius: 12px; font-family: "SBL Hebrew", "Ezra SIL", "SBL Greek", "Gentium Plus", "Times New Roman", "Noto Serif", serif; }
+.linha-original.hebraico { font-size: 1.9rem; }
+.abas-texto { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: .8rem; }
+.abas-texto button { border: 1.5px solid var(--linha); background: var(--papel); color: var(--tinta); border-radius: 999px; padding: 6px 13px; font: 600 .82rem var(--sans); cursor: pointer; }
+.abas-texto button[aria-checked="true"] { border-color: var(--vinho-2); background: var(--vinho-claro); color: var(--vinho); }
+.palavras-orig { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.palavra-orig { display: flex; flex-direction: column; align-items: center; gap: 2px; text-align: center; padding: 10px 6px; border: 1px solid var(--linha); border-radius: 12px; background: var(--papel); cursor: pointer; color: var(--tinta); transition: border-color .15s, transform .15s; }
+.palavra-orig:hover { border-color: var(--vinho-2); transform: translateY(-1px); }
+.palavra-orig.ativa { border-color: var(--vinho-2); background: var(--vinho-claro); }
+.palavra-orig .o { font-size: 1.35rem; line-height: 1.5; }
+.palavra-orig .o.hebraico { font-size: 1.6rem; }
+.palavra-orig .tr { font-style: italic; font-size: .82rem; color: var(--suave); }
+.palavra-orig .pt { font: 600 .85rem var(--sans); color: var(--vinho-2); }
+.palavra-orig .st { font: 600 .68rem var(--sans); color: var(--ouro); }
+.orig-detalhe { margin-top: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--linha); background: var(--papel); }
+.orig-dados { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: .4rem 0 .8rem; font-size: .92rem; }
+.orig-dados dt { color: var(--suave); font-weight: 600; }
+.orig-dados dd { margin: 0; }
+.lex-def { white-space: normal; line-height: 1.55; }
+.lex-caixa { padding: 12px 14px; border-radius: 12px; background: var(--vinho-claro); margin-bottom: .8rem; }
+.lex-caixa p { margin: 0 0 .3rem; }
+.chips-palavras.orig button { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 12px; border: 0; border-radius: 999px; background: var(--ouro-claro); color: var(--tinta); font: 500 .88rem var(--sans); cursor: pointer; }
+.chips-palavras.orig button small { color: var(--ouro); font-weight: 700; }
+.chips-palavras.orig .o { font-size: 1.1rem; }
+html[data-tema="noite"] .linha-original, html[data-tema="noite"] .lex-caixa { background: #1F3328; }
+html[data-tema="noite"] .palavra-orig, html[data-tema="noite"] .orig-detalhe { background: #1A241D; border-color: #2E4234; color: #E4E8E1; }
+html[data-tema="noite"] .palavra-orig.ativa { background: #24402F; }
+html[data-tema="noite"] .chips-palavras.orig button { background: #2B2A1E; color: #E4E8E1; }
+@media (max-width: 520px) { .palavras-orig { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); } .orig-dados { grid-template-columns: 1fr; } .orig-dados dt { margin-top: .3rem; } }

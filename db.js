@@ -163,6 +163,9 @@ CREATE TABLE IF NOT EXISTS sermoes (
   criado_em TEXT DEFAULT (datetime('now','localtime')),
   atualizado_em TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS ia_cache (
+  chave TEXT PRIMARY KEY, texto TEXT NOT NULL, criado_em TEXT DEFAULT (datetime('now','localtime'))
+);
 CREATE TABLE IF NOT EXISTS ia_uso (
   usuario_id INTEGER NOT NULL, dia TEXT NOT NULL, n INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (usuario_id, dia)

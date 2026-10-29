@@ -167,4 +167,18 @@ function remover(cod) {
   return true;
 }
 
-module.exports = { comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };
+// Uma Bíblia instalada com números de Strong (ex.: ARA), para mostrar o português de cada palavra original
+let comStrong;
+function bibliaComStrong() {
+  if (comStrong !== undefined && (!comStrong || porCod(comStrong))) return comStrong ? porCod(comStrong) : null;
+  comStrong = null;
+  for (const r of listar('biblia')) {
+    if (r.formato !== 'mysword' || !fs.existsSync(caminho(r))) continue;
+    try { if (/<W[HG]\d/.test(ms.versoBruto(caminho(r), r.formato, 0, 1, 1)) && /<WG\d/.test(ms.versoBruto(caminho(r), r.formato, 42, 3, 16))) { comStrong = r.cod; break; } } catch {}
+  }
+  return comStrong ? porCod(comStrong) : null;
+}
+aoRemover.push(() => { comStrong = undefined; });
+function brutoComStrong(l, c, v) { const r = bibliaComStrong(); if (!r) return { texto: '', sigla: '' }; try { return { texto: ms.versoBruto(caminho(r), r.formato, l, c, v), sigla: r.sigla }; } catch { return { texto: '', sigla: '' }; } }
+
+module.exports = { brutoComStrong, comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };

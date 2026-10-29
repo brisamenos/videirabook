@@ -2,6 +2,7 @@
 const { db, getConfig, setConfig } = require('./db');
 const BIB = require('./biblioteca');
 const ms = require('./mysword');
+const ORIG = require('./original');
 
 const NOMES = ['Gênesis', 'Êxodo', 'Levítico', 'Números', 'Deuteronômio', 'Josué', 'Juízes', 'Rute', '1 Samuel', '2 Samuel', '1 Reis', '2 Reis',
   '1 Crônicas', '2 Crônicas', 'Esdras', 'Neemias', 'Ester', 'Jó', 'Salmos', 'Provérbios', 'Eclesiastes', 'Cânticos', 'Isaías', 'Jeremias',
@@ -319,6 +320,111 @@ module.exports = function rotas(app, P, auth, h) {
       } else if (novo) {
         hist.push({ papel: 'eu', texto: msg }, { papel: 'ia', texto: novo });
         db.prepare("UPDATE sermoes SET chat = ?, atualizado_em = datetime('now','localtime') WHERE id = ?").run(JSON.stringify(hist.slice(-30)), s.id);
+      }
+    } catch (e) { if (!res.headersSent) next(e); else res.end(); }
+  });
+
+  // ── IA sobre um versículo: contexto, concordância e estudo das palavras originais (com cache compartilhado)
+  const ABREV = ['Gn', 'Êx', 'Lv', 'Nm', 'Dt', 'Js', 'Jz', 'Rt', '1 Sm', '2 Sm', '1 Rs', '2 Rs', '1 Cr', '2 Cr', 'Ed', 'Ne', 'Et', 'Jó', 'Sl', 'Pv', 'Ec', 'Ct', 'Is', 'Jr', 'Lm', 'Ez', 'Dn', 'Os', 'Jl', 'Am', 'Ob', 'Jn', 'Mq', 'Na', 'Hc', 'Sf', 'Ag', 'Zc', 'Ml',
+    'Mt', 'Mc', 'Lc', 'Jo', 'At', 'Rm', '1 Co', '2 Co', 'Gl', 'Ef', 'Fp', 'Cl', '1 Ts', '2 Ts', '1 Tm', '2 Tm', 'Tt', 'Fm', 'Hb', 'Tg', '1 Pe', '2 Pe', '1 Jo', '2 Jo', '3 Jo', 'Jd', 'Ap'];
+  const FUNCIONAIS = /^(T|C|R|S|To|Td|Tn)|^(CONJ|PREP|PRT|COND|INJ)|^[TPRCDKIXQFS]-/;
+  function palavrasOriginais(l, c, v) {
+    const o = ORIG.verso(l, c, v, BIB.brutoComStrong(l, c, v).texto); return o ? o.palavras : [];
+  }
+  function linhasOriginal(pal) {
+    return pal.map(w => `- ${w.o} (${w.t}) — ${w.s}${w.lema ? ` ${w.lema}` : ''}${w.sentido ? ` “${w.sentido}”` : ''} — ${w.morf}${w.pt ? ` — em português: ${w.pt}` : ''}${w.ed === 'T' ? ' — [só no Texto Recebido]' : ''}`).join('\n');
+  }
+  function materialVerso(tipo, l, c, v, versao) {
+    const partes = [];
+    const cap = BIB.trecho(versao, l, c, 1, 0);
+    if (cap) {
+      const ini = cap.linhas.length > 60 ? Math.max(1, v - 10) : 1, fim = cap.linhas.length > 60 ? v + 10 : 999;
+      partes.push(`## ${NOMES[l]} ${c} (${cap.sigla}), versículos ${ini} em diante — o versículo estudado é o ${v}\n${cap.epigrafe && ini === 1 ? `[Epígrafe] ${cap.epigrafe}\n` : ''}${cap.linhas.filter(([n]) => n >= ini && n <= fim).map(([n, x]) => `${n === v ? '>>> ' : ''}${n} ${x}`).join('\n')}`);
+    }
+    const pal = palavrasOriginais(l, c, v);
+    if (pal.length) partes.push(`## Texto original de ${ABREV[l]} ${c}.${v} (${l < 39 ? 'hebraico, Códice de Leningrado' : 'grego, Nestle-Aland 28 e Texto Recebido'}) com números de Strong e análise\n${linhasOriginal(pal.filter(w => tipo !== 'palavras' || w.ed !== 'T'))}`);
+    if (tipo === 'palavras') {
+      const vistos = new Set();
+      const lex = pal.filter(w => w.s && !FUNCIONAIS.test(w.m) && !vistos.has(w.s) && vistos.add(w.s)).slice(0, 12)
+        .map(w => { const x = ORIG.lexico(w.s, w.suf); return x ? `### ${w.s} ${x.lema} (${(x.translit || '').replace(/\./g, '')}) — ${w.ocorr} ocorrências\n${String(x.def || x.gloss).slice(0, 1100)}` : ''; }).filter(Boolean);
+      if (lex.length) partes.push(`## Léxico (TBESH/TBESG, em inglês — traduza para o português)\n${lex.join('\n\n')}`);
+    }
+    if (tipo === 'contexto') {
+      const dic = BIB.listar('dicionario')[0];
+      if (dic) {
+        const idx = indiceDic(dic.cod);
+        if (idx) {
+          const nome = ms.norm(NOMES[l]).replace(/^[123]\s+/, '');
+          const quer = l >= 39 && l <= 42 ? /evangelho/ : l >= 44 && l <= 64 ? /epistola|carta/ : /livro/;
+          const k = [...idx.keys()].filter(x => x.startsWith(nome)).map(x => ({ x, p: (quer.test(x) ? 0 : /livro|epistola|evangelho|carta/.test(x) ? 1 : 2) * 1000 + x.length })).sort((a, b) => a.p - b.p)[0];
+          const vb = k && textoVerbete(dic.cod, idx.get(k.x));
+          if (vb) partes.push(`## Verbete do dicionário: ${vb.palavra} (${vb.dic})\n${vb.texto.slice(0, 3000)}`);
+        }
+      }
+      for (const m of BIB.comentariosDoVerso(l, c, v, { html: false }).slice(0, 2)) {
+        const t = m.trechos.sort((a, b) => ((a.ate || a.de) - a.de) - ((b.ate || b.de) - b.de))[0];
+        if (t) partes.push(`## Comentário: ${m.titulo}${m.creditos ? ` (${m.creditos})` : ''} sobre ${ABREV[l]} ${t.ref}\n${t.texto.slice(0, 2800)}`);
+      }
+    }
+    if (tipo === 'concordancia') {
+      const vistos = new Set(); const cand = [];
+      // palavras de conteúdo (verbos, substantivos, adjetivos), das mais raras para as mais comuns
+      const conteudo = pal.filter(w => w.s && w.ed !== 'T' && /^(V|N|A)/.test(w.m) && w.ocorr > 1 && w.ocorr < 900 && !vistos.has(w.s) && vistos.add(w.s)).sort((a, b) => a.ocorr - b.ocorr).slice(0, 7);
+      for (const w of conteudo) {
+        const oc = ORIG.ocorrencias(w.s, 2000).lista.filter(x => !(x.l === l && x.c === c && x.v === v));
+        const passo = Math.max(1, Math.floor(oc.length / 10));
+        const escolhidos = oc.filter((_, i) => i % passo === 0).slice(0, 10);
+        for (const x of escolhidos) {
+          const t = BIB.trecho(versao, x.l, x.c, x.v, x.v);
+          const txt = t && t.linhas[0] ? t.linhas[0][1] : '';
+          if (txt) cand.push(`- ${ABREV[x.l]} ${x.c}.${x.v} [${w.s} ${w.lema || w.o}] ${txt}`);
+        }
+      }
+      if (cand.length) partes.push(`## Versículos candidatos (onde aparecem as mesmas palavras no original)\n${[...new Set(cand)].join('\n')}`);
+    }
+    return partes.join('\n\n');
+  }
+  const PEDIDOS = {
+    contexto: (ref) => `Explique o contexto de ${ref} para um estudante da Bíblia. Use estas seções em Markdown:
+## Contexto histórico
+(autor, destinatários, época e situação — só o que for seguro pelo material ou amplamente aceito)
+## Contexto literário
+(em que parte do livro o versículo está, o que vem antes e o que vem depois, e como ele se liga ao argumento)
+## O que o versículo quer dizer
+## Palavras-chave no original
+(2 a 4 palavras do texto original fornecido, com a transliteração e o sentido)
+## Para a vida hoje
+Entre 300 e 450 palavras. Não escreva nada antes da primeira seção.`,
+    concordancia: (ref) => `Monte uma concordância temática para ${ref}. Escolha de 8 a 14 versículos que realmente se relacionam com o sentido de ${ref}, tirados SOMENTE da lista "Versículos candidatos" (você pode incluir também passagens paralelas do mesmo episódio, se tiver certeza absoluta da referência).
+Agrupe por tema com títulos "### Tema" e, em cada item, escreva: "- **Referência** — uma linha dizendo como ele se liga a ${ref}". Não transcreva os versículos. Comece com uma frase curta explicando o tema central de ${ref}.`,
+    palavras: (ref) => `Faça um estudo das palavras principais de ${ref} no ${'original'}. Para cada palavra importante (de 3 a 7), escreva:
+### Palavra original (transliteração) — número de Strong
+- **Sentido:** (a partir do léxico fornecido, traduzido para o português)
+- **Neste versículo:** forma gramatical e o que ela acrescenta ao sentido
+- **Outras ocorrências:** quantas vezes aparece e um ou dois exemplos de referência, se o léxico citar
+Termine com "## Síntese" em 2 ou 3 frases. Use só os dados fornecidos; não invente etimologias.`,
+  };
+  app.post('/api/ia/verso', auth, soIA, async (req, res, next) => {
+    try {
+      const b = req.body || {}; const tipo = String(b.tipo || '');
+      const l = Number(b.livro), c = Number(b.cap), v = Number(b.verso);
+      if (!PEDIDOS[tipo] || !(l >= 0 && l < 66) || !(c >= 1) || !(v >= 0)) return res.status(400).json({ erro: 'Pedido inválido.' });
+      const versao = String(b.versao || BIB.padrao());
+      const chave = `${tipo}:${l}.${c}.${v}`;
+      const guardado = db.prepare('SELECT texto FROM ia_cache WHERE chave = ?').get(chave);
+      if (guardado && !(b.refazer && req.user.papel === 'professor')) {
+        res.set({ 'Content-Type': 'text/plain; charset=utf-8', 'X-Do-Cache': '1' }); return res.end(guardado.texto);
+      }
+      if (!limite(req, res)) return;
+      const ref = `${NOMES[l]} ${c}.${v}`;
+      const texto = await transmitir(req, res, [
+        { role: 'system', content: `Você é um professor de Bíblia e teologia de tradição evangélica pentecostal, fiel às Escrituras. Escreva em português do Brasil, com clareza.
+REGRAS: não invente versículos, datas, números ou costumes; cite outros textos só pela referência (ex.: Rm 5.8; 1 Co 13.4-7), sem transcrever; termos hebraicos e gregos só a partir do texto original e do léxico fornecidos; ao usar um comentário ou dicionário, diga de qual obra veio a informação; se algo for incerto, diga que é incerto ou omita.` },
+        { role: 'user', content: `${PEDIDOS[tipo](ref)}\n\n# MATERIAL\n\n${materialVerso(tipo, l, c, v, versao) || '(sem material)'}` },
+      ]);
+      if (texto && texto.trim().length > 40) {
+        contarUso(req.user);
+        db.prepare('INSERT INTO ia_cache (chave, texto) VALUES (?, ?) ON CONFLICT(chave) DO UPDATE SET texto = excluded.texto, criado_em = datetime(\'now\',\'localtime\')').run(chave, texto.trim());
       }
     } catch (e) { if (!res.headersSent) next(e); else res.end(); }
   });
