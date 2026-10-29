@@ -101,6 +101,7 @@ BIB.aoRemover.push(cod => indices.delete(cod));
 function indiceDic(cod) {
   const r = BIB.dicionario(cod); if (!r) return null;
   if (!indices.has(cod)) {
+    // (se o arquivo tiver um formato inesperado, o erro sobe e quem chamou ignora este dicionário)
     const m = new Map();
     for (const w of ms.verbetes(BIB.caminho(r), r.formato, '', 100000)) { const k = ms.norm(w); if (!m.has(k)) m.set(k, w); }
     indices.set(cod, m);
@@ -142,7 +143,9 @@ function montarMaterial(s) {
   const pedidas = String(s.palavras || '').split(/[,;\n]+/).map(x => x.trim()).filter(Boolean).slice(0, 6);
   const verbetes = [];
   for (const cod of dics) {
-    const idx = indiceDic(cod); if (!idx) continue;
+    let idx = null; try { idx = indiceDic(cod); } catch (e) { console.error('[sermões] dicionário ignorado:', cod, e.message); }
+    if (!idx) continue;
+    try {
     const pega = w => { if (verbetes.length >= 9 || verbetes.some(v => ms.norm(v.palavra) === ms.norm(w))) return; const v = textoVerbete(cod, w); if (v && v.texto.length > 40) verbetes.push(v); };
     pedidas.forEach(p => { const k = idx.get(ms.norm(p)); if (k) pega(k); });
     if (s.livro !== null && s.livro !== undefined) {
@@ -156,6 +159,7 @@ function montarMaterial(s) {
     const auto = candidatos(`${textoBase} ${s.tema || ''}`).map(c => idx.get(c)).filter(Boolean);
     const ricos = [...new Set(auto)].map(w => ({ w, n: (textoVerbete(cod, w) || { texto: '' }).texto.length })).filter(x => x.n > 300).sort((a, b) => b.n - a.n).slice(0, 5);
     ricos.forEach(x => pega(x.w));
+    } catch (e) { console.error('[sermões] erro ao ler o dicionário', cod, e.message); }
   }
   if (verbetes.length) {
     partes.push(`## Verbetes de dicionário bíblico (use como fonte para contexto histórico, cultural e termos originais)\n${verbetes.map(v => `### ${v.palavra} (${v.dic})\n${v.texto.slice(0, 2400)}${v.texto.length > 2400 ? '…' : ''}`).join('\n\n')}`);
@@ -360,7 +364,7 @@ module.exports = function rotas(app, P, auth, h) {
     }
     if (tipo === 'contexto') {
       const dic = BIB.listar('dicionario')[0];
-      if (dic) {
+      if (dic) try {
         const idx = indiceDic(dic.cod);
         if (idx) {
           const nome = ms.norm(NOMES[l]).replace(/^[123]\s+/, '');
@@ -369,7 +373,7 @@ module.exports = function rotas(app, P, auth, h) {
           const vb = k && textoVerbete(dic.cod, idx.get(k.x));
           if (vb) partes.push(`## Verbete do dicionário: ${vb.palavra} (${vb.dic})\n${vb.texto.slice(0, 3000)}`);
         }
-      }
+      } catch (e) { console.error('[IA] dicionário ignorado no contexto:', dic.cod, e.message); }
       for (const m of BIB.comentariosDoVerso(l, c, v, { html: false }).slice(0, 2)) {
         const t = m.trechos.sort((a, b) => ((a.ate || a.de) - a.de) - ((b.ate || b.de) - b.de))[0];
         if (t) partes.push(`## Comentário: ${m.titulo}${m.creditos ? ` (${m.creditos})` : ''} sobre ${ABREV[l]} ${t.ref}\n${t.texto.slice(0, 2800)}`);

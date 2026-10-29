@@ -28,7 +28,7 @@ function abrir(arquivo) {
   }
   return d;
 }
-function fechar(arquivo) { const d = abertos.get(arquivo); if (d) { try { d.close(); } catch {} abertos.delete(arquivo); } }
+function fechar(arquivo) { colunasDic.delete(arquivo); const d = abertos.get(arquivo); if (d) { try { d.close(); } catch {} abertos.delete(arquivo); } }
 
 function tabelas(d) { return d.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all().map(r => r.name); }
 function temTabela(ts, nome) { return ts.find(t => t.toLowerCase() === nome.toLowerCase()); }
@@ -205,9 +205,23 @@ function buscar(arquivo, formato, termo, { de = 0, ate = 65, limite = 300 } = {}
 }
 
 // ── Dicionários
-function dicColunas(formato) { return formato === 'mybible' ? { w: 'topic', d: 'definition', o: 'rowid' } : { w: 'word', d: 'data', o: 'relativeorder' }; }
+// Os dicionários variam: descobre as colunas de cada arquivo (palavra, texto e ordem)
+const colunasDic = new Map();
+function dicColunas(formato, arquivo) {
+  if (arquivo && colunasDic.has(arquivo)) return colunasDic.get(arquivo);
+  let c = formato === 'mybible' ? { w: 'topic', d: 'definition', o: 'rowid' } : { w: 'word', d: 'data', o: 'relativeorder' };
+  if (arquivo) {
+    try {
+      const cols = abrir(arquivo).prepare('PRAGMA table_info(dictionary)').all().map(x => x.name);
+      const acha = (...nomes) => cols.find(x => nomes.includes(x.toLowerCase()));
+      c = { w: acha('word', 'topic', 'term', 'title') || cols[0], d: acha('data', 'definition', 'text', 'content') || cols[1] || cols[0], o: acha('relativeorder', 'order', 'ordem') || 'rowid' };
+    } catch { /* usa o padrão */ }
+    colunasDic.set(arquivo, c);
+  }
+  return c;
+}
 function verbetes(arquivo, formato, termo, limite = 80) {
-  const d = abrir(arquivo); const c = dicColunas(formato); const q = norm(termo).replace(/[%_]/g, '');
+  const d = abrir(arquivo); const c = dicColunas(formato, arquivo); const q = norm(termo).replace(/[%_]/g, '');
   if (!q) return d.prepare(`SELECT ${c.w} AS w FROM dictionary ORDER BY ${c.o} LIMIT ?`).all(limite).map(r => r.w);
   const inicio = d.prepare(`SELECT ${c.w} AS w FROM dictionary WHERE normw(${c.w}) LIKE ? ORDER BY normw(${c.w}) LIMIT ?`).all(q + '%', limite).map(r => r.w);
   if (inicio.length >= limite) return inicio;
@@ -215,19 +229,19 @@ function verbetes(arquivo, formato, termo, limite = 80) {
   return [...inicio, ...meio];
 }
 function verbeteBruto(arquivo, formato, palavra) {
-  const d = abrir(arquivo); const c = dicColunas(formato);
+  const d = abrir(arquivo); const c = dicColunas(formato, arquivo);
   return d.prepare(`SELECT ${c.w} AS w, ${c.d} AS d FROM dictionary WHERE ${c.w} = ? COLLATE NOCASE LIMIT 1`).get(palavra)
     || d.prepare(`SELECT ${c.w} AS w, ${c.d} AS d FROM dictionary WHERE normw(${c.w}) = ? LIMIT 1`).get(norm(palavra));
 }
 // Vários verbetes de uma vez (usado pela IA): só os que existem
 function verbetesExatos(arquivo, formato, palavras) {
-  const d = abrir(arquivo); const c = dicColunas(formato);
+  const d = abrir(arquivo); const c = dicColunas(formato, arquivo);
   const st = d.prepare(`SELECT ${c.w} AS w, ${c.d} AS d FROM dictionary WHERE normw(${c.w}) = ? LIMIT 1`);
   const out = []; for (const p of palavras) { const r = st.get(norm(p)); if (r && !out.some(x => x.w === r.w)) out.push(r); }
   return out;
 }
 function verbetePorPrefixo(arquivo, formato, prefixo) {
-  const d = abrir(arquivo); const c = dicColunas(formato);
+  const d = abrir(arquivo); const c = dicColunas(formato, arquivo);
   return d.prepare(`SELECT ${c.w} AS w, ${c.d} AS d FROM dictionary WHERE normw(${c.w}) LIKE ? ORDER BY length(${c.w}) LIMIT 1`).get(norm(prefixo) + '%');
 }
 // ── Comentários: trechos que cobrem um versículo (ou o capítulo inteiro, com verso 0)
