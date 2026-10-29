@@ -288,14 +288,14 @@ window.VB = (function () {
   VB.VERSOES = [['ara', 'ARA', 'Almeida Revista e Atualizada', true], ['acf', 'ACF', 'Almeida Corrigida Fiel', true],
     ['nvi', 'NVI', 'Nova Versão Internacional', true], ['nvt', 'NVT', 'Nova Versão Transformadora', true],
     ['kjf', 'KJF', 'King James Fiel 1611', true], ['alm', 'Almeida', 'Almeida 1819', true]];
-  VB.DICIONARIOS = []; VB.bibliaPadrao = 'ara';
+  VB.DICIONARIOS = []; VB.COMENTARIOS = []; VB.bibliaPadrao = 'ara';
   VB.normalizar = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   VB.carregarBiblioteca = async function () {
     try {
       const b = await VB.api('/api/biblioteca');
       if (b.biblias.length) VB.VERSOES = b.biblias.map(x => [x.cod, x.sigla, x.titulo, true]);
       if (!VB.VERSOES.some(v => /^arc$/i.test(v[1]))) VB.VERSOES.push(['arc', 'ARC', 'Almeida Revista e Corrigida · abre no site', false]);
-      VB.DICIONARIOS = b.dicionarios; VB.bibliaPadrao = b.padrao;
+      VB.DICIONARIOS = b.dicionarios; VB.COMENTARIOS = b.comentarios || []; VB.bibliaPadrao = b.padrao;
     } catch { /* fica com a lista padrão */ }
   };
   VB.versaoInterna = c => !!(VB.VERSOES.find(v => v[0] === c) || [])[3];
@@ -321,7 +321,7 @@ window.VB = (function () {
   ];
   VB.versaoBiblia = () => { const v = VB.pref.get('versao', VB.bibliaPadrao); return VB.VERSOES.some(x => x[0] === v) ? v : (VB.VERSOES[0] || ['ara'])[0]; };
   // Texto de um capítulo como parágrafos (títulos de seção, versículo destacado, versão comparada)
-  VB.htmlVersos = (d, { ini = 0, fim = 0, destaque = 0, comp = null } = {}) => {
+  VB.htmlVersos = (d, { ini = 0, fim = 0, destaque = 0, comp = null, acoes = false } = {}) => {
     const fimPar = new Set(d.fim || []), recuo = d.recuo || {};
     const epi = d.epigrafe && (!ini || ini === 1) ? `<p class="epigrafe">${esc(d.epigrafe)}</p>` : '';
     return epi + d.versos.map((t, i) => {
@@ -329,9 +329,117 @@ window.VB = (function () {
       const tit = d.titulos && d.titulos[n] && !ini ? `<h4 class="titulo-secao">${esc(d.titulos[n])}</h4>` : '';
       const c = comp && comp.versos[i] ? `<p class="comparado"><b>${esc(comp.sigla)}</b>${comp.versos[i]}</p>` : '';
       const cls = [destaque === n ? 'destaque' : '', fimPar.has(n) ? 'fim-par' : '', recuo[n] ? `recuo-${Math.min(4, recuo[n])}` : ''].filter(Boolean).join(' ');
-      return `${tit}<p id="v${n}"${cls ? ` class="${cls}"` : ''}><sup>${n}</sup>${t}</p>${c}`;
+      const ac = acoes ? `<button type="button" class="acao-verso" data-acao-v="${n}" aria-label="Opções do versículo ${n}" aria-haspopup="menu"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="19" cy="12" r="1.9"/></svg></button>` : '';
+      return `${tit}<p id="v${n}"${cls ? ` class="${cls}"` : ''}><sup>${n}</sup>${t}${ac}</p>${c}`;
     }).join('');
   };
+  // ── Menu de cada versículo: contexto, comentários, concordância, gerar mensagem, copiar
+  const PARADAS_V = new Set('para pelo pela pelos pelas como mais mas que quem qual quais quando onde entre sobre este esta estes estas esse essa esses essas aquele aquela isto isso seu sua seus suas meu minha meus minhas teu tua nosso nossa vosso vossa lhe lhes eles elas ele ela todo toda todos todas pois porque porém então assim também ainda não nem seja será foram eram estava está estão tinha havia disse diz fazer feito sendo tendo tem hoje agora depois antes sempre aqui eis tão tanto grande vós nós'.split(' '));
+  const refVerso = (l, cap, v) => `${VB.LIVROS[l][1]} ${cap}.${v}`;
+  function fecharMenuVerso() { const m = document.querySelector('.menu-verso'); if (m) { m.remove(); document.querySelector('.acao-verso[aria-expanded="true"]')?.setAttribute('aria-expanded', 'false'); } }
+  VB.menuVerso = function (btn) {
+    fecharMenuVerso();
+    const caixa = btn.closest('[data-ctx-livro]'); if (!caixa) return;
+    const l = Number(caixa.dataset.ctxLivro), cap = Number(caixa.dataset.ctxCap), versao = caixa.dataset.ctxVersao, v = Number(btn.dataset.acaoV);
+    const p = btn.closest('p'); const texto = p ? [...p.childNodes].filter(n => !(n.nodeType === 1 && (n.tagName === 'SUP' || n.matches('button, .nota-texto')))).map(n => n.textContent).join('').replace(/\s+/g, ' ').trim() : '';
+    const itens = [
+      ['contexto', 'Contexto', '<path d="M4 6h16M4 12h10M4 18h16"/>'],
+      ['comentarios', `Ver comentários${btn.classList.contains('tem-com') ? '' : ''}`, '<path d="M4 5h16v11H8l-4 4z"/>'],
+      ['concordancia', 'Concordância', '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/>'],
+      ...(VB.me && VB.me.ia ? [['sermao', 'Gerar mensagem', '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/>']] : []),
+      ['copiar', 'Copiar versículo', '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>'],
+    ];
+    const menu = document.createElement('div'); menu.className = 'menu-verso'; menu.setAttribute('role', 'menu');
+    menu.innerHTML = `<div class="menu-verso-cab">${esc(VB.LIVROS[l][0])} ${cap}.${v}</div>` + itens.map(i => `<button type="button" role="menuitem" data-op="${i[0]}"><svg viewBox="0 0 24 24" aria-hidden="true">${i[2]}</svg>${i[1]}</button>`).join('');
+    document.body.append(menu);
+    const r = btn.getBoundingClientRect(); const w = menu.offsetWidth, hh = menu.offsetHeight;
+    let x = r.right - w + 6, y = r.bottom + 6;
+    if (x < 10) x = 10; if (x + w > innerWidth - 10) x = innerWidth - w - 10;
+    if (y + hh > innerHeight - 10) y = Math.max(10, r.top - hh - 6);
+    menu.style.left = `${x + scrollX}px`; menu.style.top = `${y + scrollY}px`;
+    btn.setAttribute('aria-expanded', 'true');
+    menu.querySelector('button').focus();
+    menu.addEventListener('click', async e => {
+      const b = e.target.closest('[data-op]'); if (!b) return; fecharMenuVerso();
+      const op = b.dataset.op;
+      if (op === 'contexto') return VB.contextoVerso(l, cap, v, versao);
+      if (op === 'comentarios') return VB.comentariosVerso(l, cap, v);
+      if (op === 'concordancia') return VB.concordanciaVerso(l, cap, v, versao, texto);
+      if (op === 'sermao') { location.hash = `#/sermoes/novo?ref=${encodeURIComponent(refVerso(l, cap, v))}`; return; }
+      if (op === 'copiar') {
+        const sigla = (VB.VERSOES.find(x => x[0] === versao) || [, ''])[1];
+        try { await navigator.clipboard.writeText(`“${texto}” (${VB.LIVROS[l][0]} ${cap}.${v}${sigla ? ` ${sigla}` : ''})`); VB.toast('Versículo copiado'); } catch { VB.toast('Não foi possível copiar neste aparelho', true); }
+      }
+    });
+  };
+  document.addEventListener('click', e => {
+    const b = e.target.closest('.acao-verso[data-acao-v]');
+    if (b) { e.preventDefault(); e.stopPropagation(); if (b.getAttribute('aria-expanded') === 'true') fecharMenuVerso(); else VB.menuVerso(b); return; }
+    if (!e.target.closest('.menu-verso')) fecharMenuVerso();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharMenuVerso(); });
+  addEventListener('hashchange', fecharMenuVerso);
+
+  // Contexto: versículos ao redor, título da seção e o verbete do livro no dicionário
+  VB.contextoVerso = async function (l, cap, v, versao) {
+    const livro = VB.LIVROS[l];
+    const m = VB.modal({ titulo: `Contexto de ${esc(livro[0])} ${cap}.${v}`, largo: true, corpo: '<div class="carregando" style="min-height:140px"></div>',
+      rodape: `<a class="btn sec" href="${VB.rotaBiblia(livro, cap, v)}" data-fechar>Ler o capítulo</a><button class="btn" data-fechar>Fechar</button>` });
+    const corpo = m.el.querySelector('.modal-corpo');
+    try {
+      const d = await VB.api(`/api/biblia/${l}/${cap}?v=${versao}`);
+      const ini = Math.max(1, v - 4), fim = Math.min(d.versos.length, v + 4);
+      let titulo = ''; for (let n = v; n >= 1; n--) if (d.titulos && d.titulos[n]) { titulo = d.titulos[n]; break; }
+      let html = `<p class="pequeno muted" style="margin:0 0 .4rem">${titulo ? `Seção: <b>${esc(titulo)}</b> · ` : ''}${esc(livro[0])} ${cap}.${ini}-${fim} (${esc(d.sigla)})</p>
+        <div class="leitura biblia-texto popup-versos" style="max-height:none">${VB.htmlVersos(d, { ini, fim, destaque: v })}</div>`;
+      html += '<div id="ctx-livro"></div>';
+      corpo.innerHTML = html;
+      const dic = VB.DICIONARIOS[0];
+      if (dic) {
+        const nome = livro[0].replace(/^[123]\s+/, '');
+        const lista = await VB.api(`/api/dicionario/${encodeURIComponent(dic.cod)}?q=${encodeURIComponent(nome)}`);
+        const quer = l >= 39 && l <= 42 ? /evangelho/i : l >= 44 && l <= 64 ? /ep[ií]stola|carta/i : /livro/i;
+        const alvo = lista.filter(w => VB.normalizar(w).startsWith(VB.normalizar(nome))).sort((a, b) => (quer.test(b) - quer.test(a)) || a.length - b.length)[0];
+        if (alvo) {
+          const vb = await VB.api(`/api/dicionario/${encodeURIComponent(dic.cod)}/verbete?p=${encodeURIComponent(alvo)}`);
+          const box = corpo.querySelector('#ctx-livro');
+          const tmp = document.createElement('div'); tmp.innerHTML = vb.html;
+          const pars = [...tmp.querySelectorAll('p')].filter(p => p.textContent.trim().length > 40).slice(0, 3);
+          box.innerHTML = `<h3 class="ctx-sub">Sobre o livro · ${esc(vb.palavra)}</h3><div class="leitura verbete" data-dic="${esc(dic.cod)}">${(pars.length ? pars.map(p => p.outerHTML).join('') : vb.html)}</div>
+            <p class="pequeno"><a href="#/dicionario/${encodeURIComponent(dic.cod)}/${encodeURIComponent(vb.palavra)}" class="ver-verbete">Ler o verbete completo no ${esc(dic.sigla)}</a></p>`;
+          VB.prepararVerbete(box);
+          box.querySelector('.ver-verbete').addEventListener('click', () => m.fechar());
+        }
+      }
+    } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+  };
+  // Comentários importados sobre o versículo (ou sobre o capítulo)
+  VB.comentariosVerso = async function (l, cap, v) {
+    const livro = VB.LIVROS[l];
+    const m = VB.modal({ titulo: `Comentários · ${esc(livro[0])} ${cap}${v ? `.${v}` : ''}`, largo: true, corpo: '<div class="carregando" style="min-height:140px"></div>',
+      rodape: `${v ? '<button class="btn sec" id="com-cap">Comentários do capítulo inteiro</button>' : ''}<button class="btn" data-fechar>Fechar</button>` });
+    const corpo = m.el.querySelector('.modal-corpo');
+    const capBtn = m.el.querySelector('#com-cap'); if (capBtn) capBtn.addEventListener('click', () => VB.comentariosVerso(l, cap, 0));
+    if (!VB.COMENTARIOS.length) { corpo.innerHTML = `<div class="vazio" style="border:0"><strong>Nenhum comentário instalado</strong>${VB.me && VB.me.papel === 'professor' ? 'Importe comentários do MySword (.cmt.mybible) em <a href="#/p/modulos" data-fechar>Módulos bíblicos</a>.' : 'O professor pode importar comentários bíblicos no painel.'}</div>`; return; }
+    try {
+      const lista = await VB.api(`/api/comentarios/${l}/${cap}/${v}`);
+      if (!lista.length) { corpo.innerHTML = `<div class="vazio" style="border:0"><strong>Nenhum comentário sobre ${v ? 'este versículo' : 'este capítulo'}</strong>Os comentários instalados (${VB.COMENTARIOS.map(c => esc(c.sigla)).join(', ')}) não tratam deste trecho.</div>`; return; }
+      corpo.innerHTML = `<p class="pequeno muted" style="margin:0 0 .8rem">${lista.length} comentário${lista.length === 1 ? '' : 's'} sobre este trecho</p>` + lista.map((c, i) => `<details class="bloco-com"${i === 0 ? ' open' : ''}>
+        <summary><b>${esc(c.titulo)}</b>${c.creditos ? ` <span class="muted pequeno">${esc(c.creditos)}</span>` : ''}</summary>
+        ${c.trechos.map(t => `<div class="trecho-com"><p class="ref-com">${esc(livro[1])} ${esc(t.ref)}</p><div class="leitura verbete">${t.html}</div></div>`).join('')}</details>`).join('');
+      VB.prepararVerbete(corpo);
+    } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; }
+  };
+  // Concordância a partir das palavras do versículo
+  VB.concordanciaVerso = function (l, cap, v, versao, texto) {
+    const palavras = [...new Set((texto.match(/[\p{L}-]{4,}/gu) || []).filter(w => !PARADAS_V.has(VB.normalizar(w))).map(w => w.toLowerCase()))].slice(0, 14);
+    const m = VB.modal({ titulo: `Concordância · ${esc(VB.LIVROS[l][0])} ${cap}.${v}`, corpo: `<p class="muted" style="margin-top:0">Toque numa palavra para ver todos os versículos em que ela aparece, ou escreva uma expressão.</p>
+      <div class="chips-palavras">${palavras.map(w => `<a href="#/concordancia/${versao}/${encodeURIComponent(w)}" data-fechar>${esc(w)}</a>`).join('')}</div>
+      <form id="f-conc-v" style="display:flex;gap:8px;margin-top:14px"><input class="input" name="q" minlength="3" required placeholder="Ex.: fruto do Espírito" aria-label="Palavra ou expressão"><button class="btn" type="submit">Procurar</button></form>`,
+      rodape: '<button class="btn sec" data-fechar>Fechar</button>' });
+    m.el.querySelector('#f-conc-v').addEventListener('submit', e => { e.preventDefault(); const q = e.target.q.value.trim(); if (q.length < 3) return; m.fechar(); location.hash = `#/concordancia/${versao}/${encodeURIComponent(q)}`; });
+  };
+
   // Verbete de dicionário numa janela (usado fora da tela do dicionário)
   VB.prepararVerbete = raiz => {
     raiz.querySelectorAll('a.ref-biblia[data-livro]').forEach(a => {

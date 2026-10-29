@@ -747,7 +747,7 @@ app.use('/api/admin', P);
 const BIB = require('./biblioteca');
 const publicoMod = r => ({ cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '' });
 app.get('/api/biblioteca', auth, h((req, res) => {
-  res.json({ padrao: BIB.padrao(), biblias: BIB.listar('biblia').map(publicoMod), dicionarios: BIB.listar('dicionario').map(publicoMod) });
+  res.json({ padrao: BIB.padrao(), biblias: BIB.listar('biblia').map(publicoMod), dicionarios: BIB.listar('dicionario').map(publicoMod), comentarios: BIB.listar('comentario').map(publicoMod) });
 }));
 app.get('/api/biblia/busca', auth, h((req, res) => {
   const q = String(req.query.q || '').trim();
@@ -760,6 +760,17 @@ app.get('/api/biblia/:livro/:cap', auth, h((req, res) => {
   if (!c) return res.status(404).json({ erro: 'Capítulo não encontrado.' });
   res.set('Cache-Control', 'private, max-age=3600');
   res.json(c);
+}));
+app.get('/api/comentarios/:livro/:cap/marcas', auth, h((req, res) => {
+  res.json(BIB.versosComentados(Number(req.params.livro), Number(req.params.cap)));
+}));
+app.get('/api/comentarios/:livro/:cap/:verso', auth, h((req, res) => {
+  const l = Number(req.params.livro), c = Number(req.params.cap), v = Number(req.params.verso);
+  if (!(l >= 0 && l < 66) || !(c >= 1)) return res.status(400).json({ erro: 'Referência inválida.' });
+  res.json(BIB.comentariosDoVerso(l, c, v));
+}));
+app.get('/api/comentario/:cod/introducao/:livro', auth, h((req, res) => {
+  res.json(BIB.introducaoLivro(req.params.cod, Number(req.params.livro)));
 }));
 app.get('/api/dicionario/:cod', auth, h((req, res) => {
   if (!BIB.dicionario(req.params.cod)) return res.status(404).json({ erro: 'Dicionário não encontrado.' });
@@ -780,7 +791,7 @@ app.get('/api/modulos/:cod/imagem/:id', auth, h((req, res) => {
 }));
 // Professor: importar e organizar módulos
 P.get('/biblioteca', h((req, res) => {
-  res.json({ padrao: BIB.padrao(), lista: db.prepare('SELECT * FROM biblioteca ORDER BY tipo, ordem, id').all()
+  res.json({ padrao: BIB.padrao(), removidos: String(getConfig().embutidos_removidos || '').split(',').filter(Boolean), lista: db.prepare('SELECT * FROM biblioteca ORDER BY tipo, ordem, id').all()
     .map(r => ({ ...r, arquivo: undefined, existe: fs.existsSync(BIB.caminho(r)) })) });
 }));
 P.post('/biblioteca', upload.single('arquivo'), h((req, res) => {
@@ -804,6 +815,7 @@ P.post('/biblioteca/:cod/mover', h((req, res) => {
   db.transaction(() => lista.forEach((id, k) => up.run(k + 1, id)))();
   res.json({ ok: true });
 }));
+P.post('/biblioteca/restaurar', h((req, res) => { BIB.restaurarEmbutidos(); res.json({ ok: true }); }));
 P.delete('/biblioteca/:cod', h((req, res) => {
   try { BIB.remover(req.params.cod); res.json({ ok: true }); } catch (e) { res.status(400).json({ erro: e.message }); }
 }));

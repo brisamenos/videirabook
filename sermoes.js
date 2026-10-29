@@ -87,6 +87,7 @@ async function transmitir(req, res, messages) {
 
 // ── Material de pesquisa: texto bíblico real do módulo, verbetes do dicionário e frases cadastradas
 const indices = new Map();
+BIB.aoRemover.push(cod => indices.delete(cod));
 function indiceDic(cod) {
   const r = BIB.dicionario(cod); if (!r) return null;
   if (!indices.has(cod)) {
@@ -150,6 +151,33 @@ function montarMaterial(s) {
     partes.push(`## Verbetes de dicionário bíblico (use como fonte para contexto histórico, cultural e termos originais)\n${verbetes.map(v => `### ${v.palavra} (${v.dic})\n${v.texto.slice(0, 2400)}${v.texto.length > 2400 ? '…' : ''}`).join('\n\n')}`);
     fontes.verbetes = verbetes.map(v => ({ palavra: v.palavra, dic: v.dic }));
   }
+  // Comentários bíblicos importados que tratam do texto base
+  const cmts = (() => { try { return JSON.parse(s.dicionarios || '[]'); } catch { return []; } })().filter(c => BIB.comentario(c));
+  fontes.comentarios = [];
+  if (cmts.length && s.livro !== null && s.livro !== undefined && s.cap) {
+    const de = s.ini || 1, ate = s.fim || s.ini || 999;
+    const blocos = [];
+    for (const m of BIB.comentariosDoVerso(s.livro, s.cap, 0, { cods: cmts, html: false }).slice(0, 4)) {
+      const trechos = m.trechos.filter(t => !t.de || (t.de <= ate && (t.ate || t.de) >= de)).sort((a, b) => ((a.ate || a.de) - a.de) - ((b.ate || b.de) - b.de));
+      // trecho longo: pega a parte que fala do versículo pedido
+      const recorte = t => {
+        if (t.texto.length <= 3000 || !s.ini) return t.texto;
+        let pos = -1, melhor = 99;   // a citação do capítulo mais próxima do versículo pedido
+        for (const m of t.texto.matchAll(/(\d{1,3})\s*[:.]\s*(\d{1,3})(?:\s*[-–]\s*(\d{1,3}))?/g)) {
+          const c = Number(m[1]), a = Number(m[2]), b = Number(m[3]) || a;
+          if (c !== s.cap || (a === t.de && b === t.ate)) continue;
+          const dist = s.ini >= a && s.ini <= b ? 0 : Math.min(Math.abs(s.ini - a), Math.abs(s.ini - b));
+          if (dist < melhor) { melhor = dist; pos = m.index; if (!dist) break; }
+        }
+        if (melhor > 6) pos = -1;
+        if (pos < 0) return t.texto.slice(0, 3000);
+        const i = Math.max(0, pos - 300); return (i ? '… ' : '') + t.texto.slice(i, i + 3000);
+      };
+      let texto = ''; for (const t of trechos) { if (texto.length > 3800) break; texto += `[${NOMES[s.livro]} ${t.ref}] ${recorte(t)}\n`; }
+      if (texto.trim()) { blocos.push(`### ${m.titulo}${m.creditos ? ` (${m.creditos})` : ''}\n${texto.slice(0, 4000)}`); fontes.comentarios.push({ cod: m.cod, titulo: m.titulo }); }
+    }
+    if (blocos.length) partes.push(`## Comentários bíblicos sobre o texto (cite o comentarista pelo nome da obra ou do autor quando usar uma ideia dele)\n${blocos.join('\n\n')}`);
+  }
   const frases = db.prepare('SELECT autor, frase, fonte FROM frases WHERE ativo = 1 ORDER BY id LIMIT 80').all();
   if (frases.length) partes.push(`## Frases autorizadas de homens de Deus (só estas podem ser citadas)\n${frases.map(f => `- "${f.frase}" — ${f.autor}${f.fonte ? ` (${f.fonte})` : ''}`).join('\n')}`);
   fontes.frases = frases.length;
@@ -170,6 +198,7 @@ REGRAS DE FIDELIDADE (obrigatórias):
 5. Citações de homens de Deus: use somente frases da lista "Frases autorizadas", palavra por palavra, com o nome do autor. No máximo duas. Se nenhuma combinar com a mensagem, não use nenhuma. Nunca atribua uma frase a alguém fora da lista.
 6. Interprete o texto no seu contexto histórico, literário e gramatical antes de aplicar. Não espiritualize o que o texto não autoriza. Diferencie o que o texto diz do que é aplicação.
 7. Doutrina: fidelidade à ortodoxia cristã e à teologia pentecostal clássica (salvação pela graça mediante a fé, santificação, batismo no Espírito Santo, dons espirituais, volta de Cristo), sem extremismos, legalismo ou promessas de prosperidade.
+8. Comentários bíblicos: quando o material trouxer comentários, você pode usar as ideias deles dizendo de qual obra ou autor vieram (ex.: "como observa o comentário A Mensagem de Rute"). Não atribua a um comentarista o que não está no trecho fornecido.
 
 TIPO DE SERMÃO: ${tipo[0]}. ${tipo[1]}
 
@@ -225,7 +254,7 @@ module.exports = function rotas(app, P, auth, h) {
     const temRef = Number.isInteger(b.livro) && b.livro >= 0 && b.livro < 66 && Number(b.cap) > 0;
     if (b.tipo !== 'tematico' && !temRef) return res.status(400).json({ erro: 'Informe o texto bíblico base (ex.: Jo 3.16-21).' });
     if (b.tipo === 'tematico' && !t(b.tema, 200) && !temRef) return res.status(400).json({ erro: 'Informe o tema do sermão.' });
-    const dics = Array.isArray(b.dicionarios) ? b.dicionarios.filter(c => BIB.dicionario(c)).slice(0, 4) : [];
+    const dics = Array.isArray(b.dicionarios) ? b.dicionarios.filter(c => BIB.dicionario(c) || BIB.comentario(c)).slice(0, 8) : [];
     const id = db.prepare(`INSERT INTO sermoes (usuario_id, titulo, tipo, referencia, livro, cap, ini, fim, tema, publico, ocasiao, duracao, formato, versao, dicionarios, palavras, observacoes)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(req.user.id, t(b.tema, 140) || t(b.referencia, 60) || 'Novo sermão', b.tipo, temRef ? t(b.referencia, 60) : null,
       temRef ? b.livro : null, temRef ? Number(b.cap) : null, temRef ? Number(b.ini) || null : null, temRef ? Number(b.fim) || Number(b.ini) || null : null,

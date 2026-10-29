@@ -43,7 +43,7 @@ function identificar(arquivo) {
     if (det) {
       const r = d.prepare(`SELECT * FROM "${det}" LIMIT 1`).get() || {};
       const v = k => { const c = Object.keys(r).find(x => x.toLowerCase() === k); return c ? r[c] : null; };
-      Object.assign(info, { titulo: v('title'), sigla: v('abbreviation'), descricao: v('description'), comentarios: v('comments'), editora: v('publisher'), idioma: v('language') });
+      Object.assign(info, { titulo: v('title'), sigla: v('abbreviation'), descricao: v('description'), comentarios: v('comments'), editora: v('publisher'), idioma: v('language'), autor: v('author') });
     } else if (temTabela(ts, 'info')) {
       const o = {}; for (const r of d.prepare('SELECT name, value FROM info').all()) o[String(r.name).toLowerCase()] = r.value;
       Object.assign(info, { titulo: o.description, sigla: null, descricao: o.detailed_info, editora: o.origin, idioma: o.language });
@@ -55,15 +55,16 @@ function identificar(arquivo) {
     else if (temTabela(ts, 'dictionary')) {
       const cols = d.prepare('PRAGMA table_info(dictionary)').all().map(c => c.name.toLowerCase());
       tipo = 'dicionario'; formato = cols.includes('word') ? 'mysword' : 'mybible';
-    } else if (temTabela(ts, 'commentary') || temTabela(ts, 'commentaries')) {
-      throw new Error('Este arquivo é um comentário bíblico. Por enquanto o app aceita Bíblias (.bbl) e dicionários (.dct).');
-    } else throw new Error('Não reconheci este arquivo. Envie uma Bíblia (.bbl.mybible) ou um dicionário (.dct.mybible) do MySword.');
+    } else if (temTabela(ts, 'commentary')) { tipo = 'comentario'; formato = 'mysword'; }
+    else if (temTabela(ts, 'commentaries')) { tipo = 'comentario'; formato = 'mybible'; }
+    else throw new Error('Não reconheci este arquivo. Envie uma Bíblia (.bbl.mybible), um dicionário (.dct.mybible) ou um comentário (.cmt.mybible) do MySword.');
     let quantos = 0;
     if (tipo === 'biblia') quantos = d.prepare(formato === 'mysword' ? `SELECT COUNT(*) n FROM "${bib}"` : 'SELECT COUNT(*) n FROM verses').get().n;
-    else quantos = d.prepare('SELECT COUNT(*) n FROM dictionary').get().n;
+    else if (tipo === 'dicionario') quantos = d.prepare('SELECT COUNT(*) n FROM dictionary').get().n;
+    else quantos = d.prepare(formato === 'mysword' ? 'SELECT COUNT(*) n FROM commentary' : 'SELECT COUNT(*) n FROM commentaries').get().n;
     const limpar = s => s ? textoPuro(s).slice(0, 400) : '';
     return { tipo, formato, quantos, titulo: limpar(info.titulo), sigla: limpar(info.sigla).slice(0, 20), descricao: limpar(info.descricao),
-      comentarios: limpar(info.comentarios), editora: limpar(info.editora) };
+      comentarios: limpar(info.comentarios), editora: limpar(info.editora), autor: limpar(info.autor) };
   } finally { d.close(); }
 }
 
@@ -225,6 +226,36 @@ function verbetePorPrefixo(arquivo, formato, prefixo) {
   const d = abrir(arquivo); const c = dicColunas(formato);
   return d.prepare(`SELECT ${c.w} AS w, ${c.d} AS d FROM dictionary WHERE normw(${c.w}) LIKE ? ORDER BY length(${c.w}) LIMIT 1`).get(norm(prefixo) + '%');
 }
+// ── Comentários: trechos que cobrem um versículo (ou o capítulo inteiro, com verso 0)
+function comentarios(arquivo, formato, livro0, cap, verso) {
+  const d = abrir(arquivo);
+  if (formato === 'mybible') {
+    const b = MYBIBLE_LIVROS[livro0];
+    const linhas = d.prepare(`SELECT chapter_number_from AS c, verse_number_from AS de, chapter_number_to AS c2, verse_number_to AS ate, text AS t FROM commentaries
+      WHERE book_number = ? AND chapter_number_from <= ? AND COALESCE(NULLIF(chapter_number_to, 0), chapter_number_from) >= ? ORDER BY chapter_number_from, verse_number_from`).all(b, cap, cap);
+    return linhas.filter(l => !verso || ((l.c < cap || l.de <= verso) && ((l.c2 || l.c) > cap || (l.ate || l.de) >= verso)))
+      .map(l => ({ cap: l.c, de: l.de, ate: l.ate || l.de, html: l.t }));
+  }
+  const linhas = verso
+    ? d.prepare('SELECT chapter AS c, fromverse AS de, toverse AS ate, data AS t FROM commentary WHERE book = ? AND chapter = ? AND fromverse <= ? AND MAX(COALESCE(toverse, 0), fromverse) >= ? ORDER BY (MAX(COALESCE(toverse,0), fromverse) - fromverse), fromverse').all(livro0 + 1, cap, verso, verso)
+    : d.prepare('SELECT chapter AS c, fromverse AS de, toverse AS ate, data AS t FROM commentary WHERE book = ? AND chapter = ? ORDER BY fromverse').all(livro0 + 1, cap);
+  return linhas.map(l => ({ cap: l.c, de: l.de, ate: Math.max(l.ate || 0, l.de), html: l.t }));
+}
+function introducao(arquivo, formato, livro0) {
+  if (formato === 'mybible') return [];
+  const d = abrir(arquivo);
+  return d.prepare('SELECT data AS t FROM commentary WHERE book = ? AND chapter = 0 ORDER BY id').all(livro0 + 1).map(l => l.t);
+}
+// Versículos de um capítulo que têm comentário (para marcar no leitor)
+function versosComentados(arquivo, formato, livro0, cap) {
+  const d = abrir(arquivo); const set = new Set();
+  const linhas = formato === 'mybible'
+    ? d.prepare('SELECT verse_number_from AS de, verse_number_to AS ate FROM commentaries WHERE book_number = ? AND chapter_number_from = ?').all(MYBIBLE_LIVROS[livro0], cap)
+    : d.prepare('SELECT fromverse AS de, toverse AS ate FROM commentary WHERE book = ? AND chapter = ?').all(livro0 + 1, cap);
+  for (const l of linhas) for (let v = Math.max(1, l.de || 1); v <= Math.max(l.ate || 0, l.de || 1) && v < 200; v++) set.add(v);
+  return set;
+}
+
 function imagem(arquivo, id) {
   const d = abrir(arquivo);
   if (!temTabela(tabelas(d), 'data')) return null;
@@ -255,6 +286,7 @@ function htmlVerbete(bruto, cod) {
     }
     if (tag === 'img') {
       const src = (attrs.match(/src\s*=\s*['"]?([^'"\s>]+)/i) || [])[1] || '';
+      if (/^data:/i.test(src)) continue;
       const id = src.replace(/^.*[\\/]/, '').replace(/^#?/, '');
       if (id) html += `<img src="/api/modulos/${encodeURIComponent(cod)}/imagem/${encodeURIComponent(id)}" alt="" loading="lazy">`;
       continue;
@@ -267,4 +299,4 @@ function htmlVerbete(bruto, cod) {
   return html;
 }
 
-module.exports = { identificar, capitulo, buscar, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };
+module.exports = { identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };

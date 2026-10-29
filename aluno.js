@@ -551,9 +551,12 @@
           [d, comp] = await Promise.all([VB.api(`/api/biblia/${idx}/${cap}?v=${v}`), compara ? VB.api(`/api/biblia/${idx}/${cap}?v=${compara}`) : null]);
         } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
         if (VB.versaoBiblia() !== v) return;   // trocou de versão enquanto carregava
-        corpo.innerHTML = `<div class="leitura biblia-texto${comp ? ' com-comparacao' : ''}">${VB.htmlVersos(d, { destaque: verso, comp })}</div>
+        corpo.innerHTML = `<div class="leitura biblia-texto${comp ? ' com-comparacao' : ''}" data-ctx-livro="${idx}" data-ctx-cap="${cap}" data-ctx-versao="${esc(v)}">${VB.htmlVersos(d, { destaque: verso, comp, acoes: true })}</div>
           <p class="pequeno muted biblia-credito">${esc(d.versao)} — ${esc(d.licenca)}${comp ? `<br>${esc(comp.versao)} — ${esc(comp.licenca)}` : ''}</p>`;
         if (verso) { const alvo = $(`#v${verso}`); if (alvo) setTimeout(() => alvo.scrollIntoView({ block: 'center' }), 50); }
+        if (VB.COMENTARIOS.length) VB.api(`/api/comentarios/${idx}/${cap}/marcas`).then(vs => vs.forEach(n => {
+          const b = corpo.querySelector(`.acao-verso[data-acao-v="${n}"]`); if (b) { b.classList.add('tem-com'); b.title = 'Tem comentário'; }
+        })).catch(() => {});
         return;
       }
       const url = urlExterna(livro, cap);

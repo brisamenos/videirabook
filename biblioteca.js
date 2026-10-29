@@ -1,7 +1,7 @@
 // VideiraBook — Bíblias e dicionários instalados (os que vêm com o app e os que o professor importa)
 const path = require('path');
 const fs = require('fs');
-const { db, getConfig, DATA_DIR } = require('./db');
+const { db, getConfig, setConfig, DATA_DIR } = require('./db');
 const ms = require('./mysword');
 
 const PASTA_EMBUTIDOS = path.join(__dirname, 'modulos', 'biblias');
@@ -23,15 +23,20 @@ function caminho(r) {
   const p = path.join(PASTA_EMBUTIDOS, path.basename(nome));
   return fs.existsSync(p) ? p : path.join(__dirname, path.basename(nome));
 }
-(function registrarEmbutidos() {
+const removidos = () => String(getConfig().embutidos_removidos || '').split(',').filter(Boolean);
+function registrarEmbutidos() {
+  const fora = removidos();
   const ins = db.prepare(`INSERT OR IGNORE INTO biblioteca (cod, tipo, formato, arquivo, sigla, titulo, creditos, ordem, embutido, tamanho)
     VALUES (?, 'biblia', ?, ?, ?, ?, ?, ?, 1, ?)`);
   for (const e of EMBUTIDOS) {
     const r = { arquivo: `embutido:${e.arquivo}` }; const p = caminho(r);
-    if (!fs.existsSync(p)) continue;
+    if (!fs.existsSync(p) || fora.includes(e.cod)) continue;
     ins.run(e.cod, e.formato || 'mysword', r.arquivo, e.sigla, e.titulo, e.creditos, e.ordem, fs.statSync(p).size);
   }
-})();
+}
+registrarEmbutidos();
+// Traz de volta as Bíblias que vêm com o app e foram excluídas
+function restaurarEmbutidos() { setConfig('embutidos_removidos', ''); registrarEmbutidos(); }
 
 const porCod = cod => db.prepare('SELECT * FROM biblioteca WHERE cod = ?').get(cod);
 function listar(tipo, { todos = false } = {}) {
@@ -93,7 +98,42 @@ function verbete(cod, palavra) {
   const v = ms.verbeteBruto(caminho(r), r.formato, palavra); if (!v) return null;
   return { palavra: v.w, html: ms.htmlVerbete(v.d, r.cod), dicionario: r.titulo, sigla: r.sigla, creditos: r.creditos || '' };
 }
-function imagem(cod, id) { const r = dicionario(cod); return r ? ms.imagem(caminho(r), id) : null; }
+function imagem(cod, id) {
+  const r = porCod(cod); if (!r || !r.ativo || r.formato === 'json' || !fs.existsSync(caminho(r))) return null;
+  return ms.imagem(caminho(r), id);
+}
+
+// Comentários
+function comentario(cod) {
+  const r = porCod(cod);
+  return r && r.tipo === 'comentario' && r.ativo && fs.existsSync(caminho(r)) ? r : null;
+}
+const refTexto = (cap, de, ate) => `${cap}${de ? `.${de}${ate > de ? `-${ate}` : ''}` : ''}`;
+// Todos os comentários instalados sobre um versículo (verso 0 = capítulo inteiro)
+function comentariosDoVerso(livro0, cap, verso, { cods = null, html = true } = {}) {
+  const lista = [];
+  for (const r of listar('comentario')) {
+    if (cods && !cods.includes(r.cod)) continue;
+    if (!fs.existsSync(caminho(r))) continue;
+    let trechos = [];
+    try { trechos = ms.comentarios(caminho(r), r.formato, livro0, cap, verso); } catch { continue; }
+    if (!trechos.length) continue;
+    lista.push({ cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '',
+      trechos: trechos.map(t => ({ ref: refTexto(t.cap, t.de, t.ate), de: t.de, ate: t.ate, ...(html ? { html: ms.htmlVerbete(t.html, r.cod) } : { texto: ms.textoPuro(String(t.html).replace(/<\/p>|<br\s*\/?>/gi, '\n')) }) })) });
+  }
+  return lista;
+}
+function introducaoLivro(cod, livro0) {
+  const r = comentario(cod); if (!r) return [];
+  try { return ms.introducao(caminho(r), r.formato, livro0).map(h => ms.htmlVerbete(h, r.cod)); } catch { return []; }
+}
+function versosComentados(livro0, cap) {
+  const set = new Set();
+  for (const r of listar('comentario')) {
+    try { if (fs.existsSync(caminho(r))) ms.versosComentados(caminho(r), r.formato, livro0, cap).forEach(v => set.add(v)); } catch {}
+  }
+  return [...set].sort((a, b) => a - b);
+}
 
 // Importar um arquivo enviado pelo professor
 function slug(s) { return ms.norm(s).replace(/[^a-z0-9]+/g, '').slice(0, 16); }
@@ -107,18 +147,24 @@ function importar(arquivoTemp, nomeOriginal) {
   fs.renameSync(arquivoTemp, path.join(PASTA_DADOS, destino));
   const ordem = (db.prepare('SELECT MAX(ordem) m FROM biblioteca WHERE tipo = ?').get(info.tipo).m || 0) + 1;
   const titulo = info.titulo && !/^©/.test(info.titulo) ? info.titulo : (info.descricao || base);
-  const creditos = info.editora || (/©/.test(info.titulo) ? info.titulo : '') || (/©/.test(info.comentarios) ? info.comentarios.slice(0, 160) : '');
+  const creditos = info.editora || info.autor || (/ - /.test(titulo) ? titulo.split(' - ').pop() : '') || (/©/.test(info.titulo) ? info.titulo : '') || (/©/.test(info.comentarios) ? info.comentarios.slice(0, 160) : '');
   const id = db.prepare(`INSERT INTO biblioteca (cod, tipo, formato, arquivo, sigla, titulo, creditos, descricao, ordem, tamanho)
     VALUES (?,?,?,?,?,?,?,?,?,?)`).run(cod, info.tipo, info.formato, `dados:${destino}`, sigla, titulo.slice(0, 120), creditos.slice(0, 200),
     (info.descricao || '').slice(0, 400), ordem, fs.statSync(path.join(PASTA_DADOS, destino)).size).lastInsertRowid;
   return { id, cod, ...info };
 }
+// Exclui o módulo do banco de dados; o arquivo importado também é apagado do servidor
+const aoRemover = [];
 function remover(cod) {
   const r = porCod(cod); if (!r) return false;
-  if (r.embutido) throw new Error('Os módulos que vêm com o app não podem ser apagados; desative se não quiser usar.');
-  const p = caminho(r); ms.fechar(p); fs.promises.unlink(p).catch(() => {});
+  if (r.tipo === 'biblia' && listar('biblia', { todos: true }).length <= 1) throw new Error('O app precisa de pelo menos uma Bíblia instalada.');
+  const p = caminho(r); ms.fechar(p);
+  if (r.embutido) setConfig('embutidos_removidos', [...new Set([...removidos(), r.cod])].join(','));
+  else fs.promises.unlink(p).catch(() => {});
   db.prepare('DELETE FROM biblioteca WHERE id = ?').run(r.id);
+  if (getConfig().biblia_padrao === r.cod) setConfig('biblia_padrao', (listar('biblia')[0] || {}).cod || '');
+  aoRemover.forEach(fn => { try { fn(r.cod); } catch {} });
   return true;
 }
 
-module.exports = { listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };
+module.exports = { comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };

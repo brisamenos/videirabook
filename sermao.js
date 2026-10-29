@@ -84,7 +84,7 @@
   });
 
   // ── Novo sermão
-  VB.registrar(/^\/sermoes\/novo$/, 'todos', async () => {
+  VB.registrar(/^\/sermoes\/novo(?:\?ref=(.+))?$/, 'todos', async refS => {
     if (!VB.me.ia) return semAcesso();
     moldura(''); document.title = 'Novo sermão · VideiraBook';
     const versoes = VB.VERSOES.filter(v => v[3]);
@@ -111,8 +111,8 @@
           <div class="campo" role="radiogroup" aria-labelledby="rot-formato"><span id="rot-formato">Formato</span>
             <div class="opcoes"><label class="opcao"><input type="radio" name="formato" value="esboco" checked> Esboço detalhado</label><label class="opcao"><input type="radio" name="formato" value="completo"> Sermão completo</label></div></div>
         </div>
-        ${VB.DICIONARIOS.length ? `<div class="campo"><span>Dicionários para a pesquisa</span>
-          <div class="opcoes">${VB.DICIONARIOS.map(d => `<label class="opcao"><input type="checkbox" name="dic" value="${esc(d.cod)}" checked> ${esc(d.titulo)}</label>`).join('')}</div></div>
+        ${VB.DICIONARIOS.length || VB.COMENTARIOS.length ? `<div class="campo"><span>Dicionários e comentários para a pesquisa</span>
+          <div class="opcoes">${[...VB.DICIONARIOS.map(d => [d, 'Dicionário']), ...VB.COMENTARIOS.map(d => [d, 'Comentário'])].map(([d, t]) => `<label class="opcao"><input type="checkbox" name="dic" value="${esc(d.cod)}" checked> ${esc(d.titulo)} <small class="muted">${t}</small></label>`).join('')}</div></div>
           <label class="campo"><span>Palavras para procurar no dicionário <small class="muted">(opcional)</small></span><input class="input" name="palavras" maxlength="200" placeholder="Ex.: graça, fé, Éfeso"><small>Além destas, o app procura sozinho as palavras importantes do texto.</small></label>`
           : '<p class="pequeno muted">Nenhum dicionário instalado. O professor pode importar dicionários do MySword em Módulos bíblicos.</p>'}
         <label class="campo"><span>Observações para a IA <small class="muted">(opcional)</small></span><textarea class="input" name="observacoes" rows="3" maxlength="1500" placeholder="Ex.: enfatizar a obra do Espírito Santo; incluir apelo para a Santa Ceia; linguagem simples."></textarea></label>
@@ -132,6 +132,7 @@
       info.className = ''; info.textContent = !f.referencia.value.trim() ? 'Livro, capítulo e versículos.' : r ? `✓ ${r.texto}` : 'Não reconheci a referência. Tente “Jo 3.16-21”.';
       info.style.color = r ? 'var(--folha)' : f.referencia.value.trim() ? 'var(--perigo)' : '';
     });
+    if (refS) { f.referencia.value = decodeURIComponent(refS); f.referencia.dispatchEvent(new Event('input')); f.tema.focus(); }
     f.addEventListener('submit', async e => {
       e.preventDefault(); const err = $('#erro-sermao'); err.textContent = '';
       const tipo = f.tipo.value; const ref = parseRef(f.referencia.value);
@@ -189,10 +190,11 @@
     usoTxt(s.uso);
     const desenharFontes = fo => {
       const el = $('#fontes'); const v = (fo && fo.verbetes) || [];
-      el.hidden = !fo || (!fo.versao && !v.length);
+      el.hidden = !fo || (!fo.versao && !v.length && !(fo.comentarios || []).length);
       el.innerHTML = `<summary>Fontes consultadas pela IA</summary>
         ${fo && fo.versao ? `<p><b>Texto bíblico:</b> ${esc(fo.versao)}</p>` : ''}
         ${v.length ? `<p><b>Verbetes de dicionário:</b> ${v.map(x => `<a href="#" class="ref-verbete" data-verbete="${esc(x.palavra)}" data-dic-de="${esc(x.dic)}">${esc(x.palavra)}</a>`).join(', ')}</p>` : ''}
+        ${fo && fo.comentarios && fo.comentarios.length ? `<p><b>Comentários consultados:</b> ${fo.comentarios.map(c => esc(c.titulo)).join(', ')}</p>` : ''}
         ${fo && fo.frases ? `<p><b>Frases autorizadas disponíveis:</b> ${fo.frases}</p>` : ''}
         <p class="pequeno muted">Toque nas referências bíblicas do sermão para conferir o texto. Revise sempre antes de pregar.</p>`;
       el.setAttribute('data-dic', (VB.DICIONARIOS.find(d => v[0] && d.sigla === v[0].dic) || VB.DICIONARIOS[0] || {}).cod || '');

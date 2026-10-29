@@ -57,9 +57,10 @@ Os interessados se inscrevem em **/inscricao** (por exemplo, `https://seu-endere
 
 ## Bíblias e dicionários (módulos MySword)
 
-Em **Módulos bíblicos**, o professor importa Bíblias (`.bbl.mybible`) e dicionários (`.dct.mybible`) do MySword, e também Bíblias do MyBible. Os arquivos ficam no volume (`/app/data/modulos`), então continuam lá depois de cada deploy.
+Em **Módulos bíblicos**, o professor importa Bíblias (`.bbl.mybible`), dicionários (`.dct.mybible`) e comentários (`.cmt.mybible`) do MySword, e também módulos do MyBible. Os arquivos ficam no volume (`/app/data/modulos`), então continuam lá depois de cada deploy.
 
-- Dá para mudar a ordem, escolher a versão padrão, desativar e editar o nome e os créditos.
+- Dá para mudar a ordem, escolher a versão padrão, desativar, editar o nome e os créditos, e excluir. Ao excluir, o módulo sai do banco de dados; o arquivo importado é apagado do servidor. As Bíblias que vêm com o app podem ser restauradas.
+- No fim de cada versículo há um botão com: Contexto, Ver comentários (de todos os comentários importados), Concordância, Gerar mensagem e Copiar.
 - Títulos de seção, epígrafes dos Salmos, palavras de Jesus em vermelho, notas de rodapé e parágrafos aparecem quando o módulo traz essas marcações.
 - Os alunos ganham **Dicionário** e **Concordância** (busca de palavra ou frase) dentro da área Bíblia.
 - ARA, ACF, NVI, NVT, KJF e Almeida 1819 já vêm com o app, na pasta `modulos/biblias`.

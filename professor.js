@@ -181,7 +181,7 @@
   const tamanho = b => b > 1048576 ? `${(b / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.round((b || 0) / 1024)} KB`;
   VB.registrar(/^\/p\/modulos$/, 'professor', async () => {
     carregando('modulos'); document.title = 'Módulos bíblicos · VideiraBook';
-    const { padrao, lista } = await VB.api('/api/admin/biblioteca');
+    const { padrao, lista, removidos } = await VB.api('/api/admin/biblioteca');
     const bloco = (tipo, titulo, vazio) => {
       const itens = lista.filter(m => m.tipo === tipo);
       return `<section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .8rem">${titulo}</h3>
@@ -192,7 +192,7 @@
           ${tipo === 'biblia' ? `<td><input type="radio" name="padrao" value="${m.cod}" ${m.cod === padrao ? 'checked' : ''} ${m.ativo ? '' : 'disabled'} aria-label="Versão padrão"></td>` : ''}
           <td><label class="chave"><input type="checkbox" data-ativo="${m.cod}" ${m.ativo ? 'checked' : ''} aria-label="Ativo"></label></td>
           <td><div class="acoes"><button class="icone-btn" data-editar="${m.cod}" title="Editar nome e créditos" aria-label="Editar">${icone.lapis}</button>
-            ${m.embutido ? '' : `<button class="icone-btn" data-excluir="${m.cod}" title="Remover" aria-label="Remover">${icone.lixo}</button>`}</div></td></tr>`).join('')}</tbody></table></div>`
+            <button class="icone-btn" data-excluir="${m.cod}" title="Excluir" aria-label="Excluir">${icone.lixo}</button></div></td></tr>`).join('')}</tbody></table></div>`
         : `<p class="muted" style="margin:0">${vazio}</p>`}</section>`;
     };
     $('#conteudo').innerHTML = `${cabecalho('Módulos bíblicos', 'Bíblias e dicionários no formato do MySword (.mybible), usados na leitura, na concordância e nos sermões.', `<button class="btn" id="importar">${icone.upload}Importar módulo</button>`)}
@@ -200,7 +200,9 @@
       <div id="envio" hidden class="painel" style="margin-bottom:16px"><p style="margin:0 0 .5rem" id="envio-txt">Enviando…</p>${VB.barra(0)}</div>
       ${bloco('biblia', 'Bíblias', 'Nenhuma Bíblia instalada.')}
       ${bloco('dicionario', 'Dicionários', 'Nenhum dicionário ainda. Importe um arquivo .dct.mybible do MySword (por exemplo, o Dicionário Wycliffe).')}
-      <p class="pequeno muted">Aceita Bíblias (<b>.bbl.mybible</b>) e dicionários (<b>.dct.mybible</b>) do MySword, e Bíblias do MyBible. Títulos, epígrafes dos Salmos, palavras de Jesus em vermelho e notas de rodapé aparecem quando o módulo traz essas marcações.</p>`;
+      ${bloco('comentario', 'Comentários', 'Nenhum comentário ainda. Importe arquivos .cmt.mybible do MySword. Eles aparecem no botão de cada versículo e entram na pesquisa dos sermões.')}
+      ${removidos.length ? `<p class="pequeno muted">Bíblias que vêm com o app e foram excluídas: ${removidos.map(esc).join(', ').toUpperCase()}. <button class="btn sec mini" id="restaurar">Restaurar</button></p>` : ''}
+      <p class="pequeno muted">Aceita Bíblias (<b>.bbl.mybible</b>), dicionários (<b>.dct.mybible</b>) e comentários (<b>.cmt.mybible</b>) do MySword, e também módulos do MyBible. Títulos, epígrafes dos Salmos, palavras de Jesus em vermelho e notas de rodapé aparecem quando o módulo traz essas marcações.</p>`;
     $('#importar').addEventListener('click', () => $('#arq-modulo').click());
     $('#arq-modulo').addEventListener('change', e => {
       const arq = e.target.files[0]; if (!arq) return;
@@ -212,13 +214,14 @@
       x.onload = async () => {
         let d = {}; try { d = JSON.parse(x.responseText); } catch {}
         if (x.status >= 400) { caixa.hidden = true; VB.toast(d.erro || 'Não foi possível importar o módulo.', true); e.target.value = ''; return; }
-        VB.toast(`${d.tipo === 'biblia' ? 'Bíblia importada' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
+        VB.toast(`${d.tipo === 'biblia' ? 'Bíblia importada' : d.tipo === 'comentario' ? 'Comentário importado' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
         await VB.carregarBiblioteca(); VB.rota();
       };
       x.onerror = () => { caixa.hidden = true; VB.toast('A conexão caiu durante o envio. Tente de novo.', true); };
       x.send(fd);
     });
     const recarregar = async () => { await VB.carregarBiblioteca(); VB.rota(); };
+    if ($('#restaurar')) $('#restaurar').addEventListener('click', async () => { await VB.api('/api/admin/biblioteca/restaurar', { method: 'POST' }); VB.toast('Bíblias restauradas'); recarregar(); });
     $$('[data-mover]').forEach(b => b.addEventListener('click', async () => { await VB.api(`/api/admin/biblioteca/${b.dataset.mover}/mover`, { method: 'POST', body: { dir: Number(b.dataset.dir) } }); recarregar(); }));
     $$('[data-ativo]').forEach(c => c.addEventListener('change', async () => {
       try { await VB.api(`/api/admin/biblioteca/${c.dataset.ativo}`, { method: 'PUT', body: { ativo: c.checked } }); recarregar(); } catch (er) { VB.erro(er); }
@@ -241,8 +244,8 @@
     }));
     $$('[data-excluir]').forEach(b => b.addEventListener('click', async () => {
       const m = lista.find(x => x.cod === b.dataset.excluir);
-      if (!(await VB.confirmar('Remover módulo', `Remover <strong>${esc(m.sigla)} — ${esc(m.titulo)}</strong> do app? O arquivo será apagado do servidor.`, 'Remover'))) return;
-      try { await VB.api(`/api/admin/biblioteca/${m.cod}`, { method: 'DELETE' }); VB.toast('Módulo removido'); recarregar(); } catch (er) { VB.erro(er); }
+      if (!(await VB.confirmar('Excluir módulo', `Excluir <strong>${esc(m.sigla)} — ${esc(m.titulo)}</strong>? Ele sai do banco de dados e some para todos.${m.embutido ? ' Como vem com o app, dá para restaurar depois nesta tela.' : ' O arquivo também é apagado do servidor.'}`))) return;
+      try { await VB.api(`/api/admin/biblioteca/${m.cod}`, { method: 'DELETE' }); VB.toast('Módulo excluído'); recarregar(); } catch (er) { VB.erro(er); }
     }));
   });
 
