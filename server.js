@@ -10,6 +10,7 @@ const multer = require('multer');
 const { db, getConfig, setConfig, recalcularDatas, checklistPadrao, iso, UPLOAD_DIR } = require('./db');
 
 const app = express();
+app.set('trust proxy', 1);   // EasyPanel fica na frente: usa o IP real de quem acessa
 const PORT = process.env.PORT || 3000;
 
 // Segredo do token: variável de ambiente ou gerado e guardado no banco
@@ -36,6 +37,7 @@ const ESTATICOS = {
   '/icon-512.png': 'icon-512.png',
   '/icon-maskable-512.png': 'icon-maskable-512.png',
   '/apple-touch-icon.png': 'apple-touch-icon.png',
+  '/img/inscricao-celular.jpg': 'inscricao-celular.jpg',
 };
 for (const [url, arq] of Object.entries(ESTATICOS)) {
   app.get(url, (req, res) => res.sendFile(path.join(__dirname, arq), { maxAge: 0, lastModified: true }));
@@ -52,6 +54,39 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
   if (!pacote || !digitais.length) return res.json([]);
   res.json([{ relation: ['delegate_permission/common.handle_all_urls'],
     target: { namespace: 'android_app', package_name: pacote, sha256_cert_fingerprints: digitais } }]);
+});
+
+// ── Inscrições (página pública /inscricao)
+app.get(['/inscricao', '/inscricoes'], (req, res) => res.sendFile(path.join(__dirname, 'inscricao.html'), { maxAge: 0, lastModified: true }));
+const DIAS_SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+app.get('/api/inscricao/info', (req, res) => {
+  const c = getConfig();
+  const total = db.prepare('SELECT COUNT(*) n FROM aulas').get().n;
+  res.json({ abertas: c.inscricoes_abertas !== '0', data_inicio: c.data_inicio || '', dia: DIAS_SEMANA[Number(c.dia_semana)] || '',
+    horario: c.horario || '', duracao_min: Number(c.duracao_min) || 90, aulas: total });
+});
+const tentativas = new Map();   // ip -> [horários]  (limite simples contra robôs)
+app.post('/api/inscricao', (req, res) => {
+  const ip = req.ip || ''; const agora = Date.now();
+  const lista = (tentativas.get(ip) || []).filter(t => agora - t < 10 * 60e3);
+  if (lista.length >= 6) return res.status(429).json({ erro: 'Muitas tentativas seguidas. Espere alguns minutos e tente de novo.' });
+  lista.push(agora); tentativas.set(ip, lista);
+  if (tentativas.size > 5000) tentativas.clear();
+  if (getConfig().inscricoes_abertas === '0') return res.status(403).json({ erro: 'As inscrições estão encerradas no momento.' });
+  const b = req.body || {};
+  if (b.site) return res.json({ ok: true });   // campo invisível preenchido: robô
+  const limpa = (v, n) => String(v || '').replace(/\s+/g, ' ').trim().slice(0, n);
+  const nome = limpa(b.nome, 120), email = limpa(b.email, 160).toLowerCase(), cargo = limpa(b.cargo, 80), igreja = limpa(b.igreja, 140);
+  const telefone = String(b.telefone || '').replace(/\D/g, '').slice(0, 13);
+  if (nome.length < 3 || !nome.includes(' ')) return res.status(400).json({ erro: 'Escreva seu nome completo.', campo: 'nome' });
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.status(400).json({ erro: 'Confira o e-mail: ele parece incompleto.', campo: 'email' });
+  if (telefone.length < 10 || telefone.length > 13) return res.status(400).json({ erro: 'Informe o WhatsApp com DDD.', campo: 'telefone' });
+  if (!cargo) return res.status(400).json({ erro: 'Diga qual é o seu cargo ou função.', campo: 'cargo' });
+  if (igreja.length < 2) return res.status(400).json({ erro: 'Informe o nome da sua igreja.', campo: 'igreja' });
+  if (db.prepare('SELECT 1 FROM inscricoes WHERE email = ? OR telefone = ?').get(email, telefone))
+    return res.json({ ok: true, repetida: true });
+  db.prepare('INSERT INTO inscricoes (nome, email, telefone, cargo, igreja) VALUES (?,?,?,?,?)').run(nome, email, telefone, cargo, igreja);
+  res.json({ ok: true });
 });
 
 // ── Upload
@@ -409,9 +444,24 @@ P.get('/alunos/:id', h((req, res) => {
 // Configurações
 P.get('/config', h((req, res) => { const c = getConfig(); delete c._segredo; res.json(c); }));
 P.put('/config', h((req, res) => {
-  const permitidas = ['nome_turma', 'dia_semana', 'horario', 'duracao_min', 'local', 'data_inicio', 'dias_antes_liberar', 'sequencial'];
+  const permitidas = ['nome_turma', 'dia_semana', 'horario', 'duracao_min', 'local', 'data_inicio', 'dias_antes_liberar', 'sequencial', 'inscricoes_abertas'];
   for (const k of permitidas) if (req.body[k] !== undefined) setConfig(k, req.body[k]);
   if (req.body.recalcular) for (const c of db.prepare('SELECT id FROM cursos').all()) recalcularDatas(c.id);
+  res.json({ ok: true });
+}));
+
+// Inscrições recebidas
+P.get('/inscricoes', h((req, res) => {
+  res.json(db.prepare(`SELECT i.*, u.usuario AS aluno_usuario FROM inscricoes i LEFT JOIN usuarios u ON u.id = i.aluno_id
+    ORDER BY i.aluno_id IS NOT NULL, i.id DESC`).all());
+}));
+P.put('/inscricoes/:id', h((req, res) => {
+  const alunoId = req.body && req.body.aluno_id ? Number(req.body.aluno_id) : null;
+  db.prepare('UPDATE inscricoes SET aluno_id = ? WHERE id = ?').run(alunoId, Number(req.params.id));
+  res.json({ ok: true });
+}));
+P.delete('/inscricoes/:id', h((req, res) => {
+  db.prepare('DELETE FROM inscricoes WHERE id = ?').run(Number(req.params.id));
   res.json({ ok: true });
 }));
 

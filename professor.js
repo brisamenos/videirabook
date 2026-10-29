@@ -7,6 +7,7 @@
       ['painel', '#/p/painel', 'Painel', icone.painel],
       ['cursos', '#/p/cursos', 'Cursos e aulas', icone.livro],
       ['alunos', '#/p/alunos', 'Alunos', icone.pessoas],
+      ['inscricoes', '#/p/inscricoes', 'Inscrições', icone.pessoa],
       ['avisos', '#/p/avisos', 'Avisos', icone.sino],
       ['config', '#/p/config', 'Configurações', icone.engrenagem],
     ];
@@ -100,16 +101,16 @@
       try { await navigator.clipboard.writeText(txt); VB.toast('Dados copiados'); } catch { VB.toast('Selecione o texto e copie manualmente', true); }
     });
   }
-  function formAluno(al, aoSalvar) {
+  function formAluno(al, aoSalvar, pre = {}) {
     const novo = !al;
     const senhaIni = novo ? gerarSenha() : '';
     const m = VB.modal({
       titulo: novo ? 'Novo aluno' : 'Editar aluno',
       corpo: `<form id="f-aluno">
-        <label class="campo"><span>Nome completo</span><input class="input" name="nome" required value="${esc(al?.nome || '')}"></label>
+        <label class="campo"><span>Nome completo</span><input class="input" name="nome" required value="${esc(al?.nome || pre.nome || '')}"></label>
         <div class="linha-campos">
           <label class="campo"><span>Usuário de acesso</span><input class="input" name="usuario" required autocapitalize="none" pattern="[A-Za-z0-9._\\-]{3,40}" value="${esc(al?.usuario || '')}"><small>Sem espaços nem acentos.</small></label>
-          <label class="campo"><span>WhatsApp</span><input class="input" name="telefone" inputmode="tel" placeholder="(88) 9 0000-0000" value="${esc(al?.telefone || '')}"></label>
+          <label class="campo"><span>WhatsApp</span><input class="input" name="telefone" inputmode="tel" placeholder="(88) 9 0000-0000" value="${esc(al?.telefone || pre.telefone || '')}"></label>
         </div>
         <label class="campo"><span>${novo ? 'Senha inicial' : 'Nova senha'}</span>
           <div style="display:flex;gap:.5rem"><input class="input" name="senha" ${novo ? 'required' : ''} minlength="6" value="${senhaIni}" placeholder="${novo ? '' : 'Deixe em branco para manter'}"><button type="button" class="btn sec" id="gerar">Gerar</button></div></label>
@@ -119,6 +120,7 @@
     });
     const f = m.el.querySelector('#f-aluno');
     let mexeuUsuario = !novo;
+    if (novo && pre.nome) f.usuario.value = sugerirUsuario(pre.nome);
     f.usuario.addEventListener('input', () => { mexeuUsuario = true; });
     f.nome.addEventListener('input', () => { if (!mexeuUsuario) f.usuario.value = sugerirUsuario(f.nome.value); });
     m.el.querySelector('#gerar').addEventListener('click', () => { f.senha.value = gerarSenha(); });
@@ -127,12 +129,13 @@
       const corpo = { nome: f.nome.value.trim(), usuario: f.usuario.value.trim(), telefone: f.telefone.value.trim(), senha: f.senha.value };
       if (!novo) corpo.ativo = f.ativo.checked;
       try {
-        if (novo) await VB.api('/api/admin/alunos', { method: 'POST', body: corpo });
+        let r;
+        if (novo) r = await VB.api('/api/admin/alunos', { method: 'POST', body: corpo });
         else await VB.api(`/api/admin/alunos/${al.id}`, { method: 'PUT', body: corpo });
         m.fechar();
         VB.toast(novo ? 'Aluno cadastrado' : 'Aluno atualizado');
         if (novo || corpo.senha) credenciais(corpo.nome, corpo.usuario.toLowerCase(), corpo.senha);
-        aoSalvar && aoSalvar();
+        aoSalvar && aoSalvar(r && r.id);
       } catch (e) { VB.erro(e); }
     });
   }
@@ -170,6 +173,80 @@
     $('#busca').addEventListener('input', e => desenhar(e.target.value));
     $('#novo').addEventListener('click', () => formAluno(null, () => { location.hash = '#/p/alunos'; VB.rota(); }));
     if (novo) { history.replaceState(null, '', '#/p/alunos'); formAluno(null, () => VB.rota()); }
+  });
+
+  // ── Inscrições vindas da página pública /inscricao
+  const foneBonito = t => { const d = String(t || '').replace(/\D/g, ''); return d.length >= 10 ? `(${d.slice(0, 2)}) ${d.slice(2, d.length - 4)}-${d.slice(-4)}` : t; };
+  const linkWhats = (t, txt) => { let d = String(t || '').replace(/\D/g, ''); if (d.length <= 11) d = '55' + d; return `https://wa.me/${d}${txt ? `?text=${encodeURIComponent(txt)}` : ''}`; };
+  VB.registrar(/^\/p\/inscricoes$/, 'professor', async () => {
+    carregando('inscricoes'); document.title = 'Inscrições · VideiraBook';
+    const [lista, cfg] = await Promise.all([VB.api('/api/admin/inscricoes'), VB.api('/api/admin/config')]);
+    const abertas = cfg.inscricoes_abertas !== '0';
+    const url = `${location.origin}/inscricao`;
+    const novas = lista.filter(i => !i.aluno_id).length;
+    const desenhar = (filtro = '') => {
+      const f = filtro.toLowerCase();
+      const vis = lista.filter(i => !f || [i.nome, i.email, i.igreja, i.cargo, i.telefone].some(x => String(x || '').toLowerCase().includes(f)));
+      $('#tab-insc').innerHTML = vis.length ? `<table class="tabela"><thead><tr><th>Inscrito</th><th>WhatsApp</th><th class="col-opc">Cargo e igreja</th><th class="col-opc">Data</th><th>Situação</th><th></th></tr></thead><tbody>
+        ${vis.map(i => `<tr>
+          <td><div class="pessoa"><span class="avatar">${esc(VB.iniciais(i.nome))}</span><div><strong>${esc(i.nome)}</strong><small>${esc(i.email)}</small></div></div></td>
+          <td><a href="${linkWhats(i.telefone)}" target="_blank" rel="noopener">${esc(foneBonito(i.telefone))}</a></td>
+          <td class="col-opc">${esc(i.cargo || '')}<br><small class="muted">${esc(i.igreja || '')}</small></td>
+          <td class="col-opc pequeno muted">${VB.quando(i.criado_em)}</td>
+          <td>${i.aluno_id ? `<span class="etiqueta ok">Aluno · ${esc(i.aluno_usuario || '')}</span>` : '<span class="etiqueta nova">Nova</span>'}</td>
+          <td><div class="acoes">
+            ${i.aluno_id ? '' : `<button class="btn mini" data-acesso="${i.id}">Criar acesso</button>`}
+            <button class="icone-btn" data-excluir="${i.id}" title="Excluir inscrição" aria-label="Excluir inscrição">${icone.lixo}</button>
+          </div></td></tr>`).join('')}</tbody></table>`
+        : `<div class="vazio" style="border:0"><strong>${lista.length ? 'Ninguém encontrado' : 'Nenhuma inscrição ainda'}</strong>${lista.length ? 'Tente outro nome.' : 'Envie o endereço da página de inscrição para os interessados.'}</div>`;
+      $$('[data-acesso]').forEach(b => b.addEventListener('click', () => {
+        const i = lista.find(x => x.id === Number(b.dataset.acesso));
+        formAluno(null, async alunoId => {
+          if (alunoId) await VB.api(`/api/admin/inscricoes/${i.id}`, { method: 'PUT', body: { aluno_id: alunoId } });
+          const vale = document.querySelector('.modal a[href^="https://wa.me/?text="]');
+          if (vale) vale.href = vale.href.replace('https://wa.me/?text=', linkWhats(i.telefone) + '?text=');
+          VB.rota();
+        }, { nome: i.nome, telefone: foneBonito(i.telefone) });
+      }));
+      $$('[data-excluir]').forEach(b => b.addEventListener('click', async () => {
+        const i = lista.find(x => x.id === Number(b.dataset.excluir));
+        if (!(await VB.confirmar('Excluir inscrição', `Excluir a inscrição de <strong>${esc(i.nome)}</strong>? ${i.aluno_id ? 'O acesso de aluno continua valendo.' : ''}`))) return;
+        await VB.api(`/api/admin/inscricoes/${i.id}`, { method: 'DELETE' }); VB.toast('Inscrição excluída'); VB.rota();
+      }));
+    };
+    $('#conteudo').innerHTML = `
+      ${cabecalho('Inscrições', `${lista.length} recebida${lista.length === 1 ? '' : 's'}${novas ? ` · ${novas} aguardando acesso` : ''}`, `<button class="btn sec" id="csv">Baixar planilha</button>`)}
+      <section class="painel" style="margin-bottom:16px">
+        <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+          <div style="min-width:0"><h3 style="margin:0 0 .25rem">Página de inscrição</h3>
+            <p class="muted pequeno" style="margin:0;word-break:break-all">${esc(url)}</p></div>
+          <div style="display:flex;flex-wrap:wrap;gap:8px">
+            <button class="btn sec mini" id="copiar-link">Copiar endereço</button>
+            <a class="btn sec mini" href="/inscricao" target="_blank" rel="noopener">${icone.externo}Abrir</a>
+            <a class="btn verde mini" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Inscrições abertas para o curso de Teologia Sistemática! Faça a sua aqui: ${url}`)}">Divulgar no WhatsApp</a>
+          </div>
+        </div>
+        <label class="chave" style="margin-top:14px"><input type="checkbox" id="abertas" ${abertas ? 'checked' : ''}>Aceitando novas inscrições</label>
+      </section>
+      <input class="input" id="busca" placeholder="Buscar por nome, e-mail, igreja ou cargo" style="max-width:380px;margin-bottom:1rem" aria-label="Buscar inscrição">
+      <div class="tabela-wrap" id="tab-insc"></div>`;
+    desenhar();
+    $('#busca').addEventListener('input', e => desenhar(e.target.value));
+    $('#copiar-link').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(url); VB.toast('Endereço copiado'); } catch { VB.toast('Selecione o endereço e copie manualmente', true); }
+    });
+    $('#abertas').addEventListener('change', async e => {
+      try { await VB.api('/api/admin/config', { method: 'PUT', body: { inscricoes_abertas: e.target.checked ? '1' : '0' } });
+        VB.toast(e.target.checked ? 'Inscrições abertas' : 'Inscrições encerradas'); } catch (er) { VB.erro(er); }
+    });
+    $('#csv').addEventListener('click', () => {
+      const cel = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+      const linhas = [['Nome', 'E-mail', 'WhatsApp', 'Cargo', 'Igreja', 'Data', 'Usuário no app'],
+        ...lista.map(i => [i.nome, i.email, foneBonito(i.telefone), i.cargo, i.igreja, i.criado_em, i.aluno_usuario || ''])];
+      const blob = new Blob(['﻿' + linhas.map(l => l.map(cel).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'inscricoes-teologia.csv';
+      document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    });
   });
 
   VB.registrar(/^\/p\/aluno\/(\d+)$/, 'professor', async id => {

@@ -632,3 +632,10 @@ html[data-tema="noite"] .tabela tbody tr:hover { background: #202923; }
 @media print { html[data-tema="noite"] { --tinta: #1F241F; --suave: #5C635B; --papel: #fff; --fundo: #fff; } }
 
 .popup-versos { max-height: 55vh; overflow: auto; font-size: calc(1.15rem * var(--escala-leitura, 1)); }
+
+/* Inscrições */
+.etiqueta { display: inline-block; padding: 3px 10px; border-radius: 99px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.etiqueta.nova { background: #F6EBD3; color: #7A5524; }
+.etiqueta.ok { background: var(--vinho-claro); color: var(--vinho-2); }
+html[data-tema="noite"] .etiqueta.nova { background: #4A3B1F; color: #EDD29A; }
+html[data-tema="noite"] .etiqueta.ok { background: #24402F; color: #BFD8B0; }

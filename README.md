@@ -46,6 +46,15 @@ Para vídeos grandes, prefira YouTube (não listado) ou Google Drive e cole o li
 4. **Alunos → Novo aluno** — o sistema sugere usuário e senha e já monta a mensagem para enviar pelo WhatsApp.
 5. No dia do encontro, aba **Turma e presença** da aula — marque quem esteve presente.
 
+## Página de inscrição
+
+Os interessados se inscrevem em **/inscricao** (por exemplo, `https://seu-endereco/inscricao`), informando nome, e-mail, WhatsApp, cargo e igreja.
+
+- As inscrições aparecem no painel do professor, em **Inscrições**.
+- O botão **Criar acesso** transforma a inscrição em aluno e já abre a mensagem com usuário e senha para enviar pelo WhatsApp da pessoa.
+- **Baixar planilha** gera um arquivo para abrir no Excel.
+- Para parar de receber inscrições, desligue “Aceitando novas inscrições”.
+
 ## Regras de liberação
 
 - A aula abre sozinha X dias antes do encontro (padrão: 7) para o pré-estudo.

@@ -126,6 +126,16 @@ CREATE TABLE IF NOT EXISTS avisos (
   fixado INTEGER NOT NULL DEFAULT 0,
   criado_em TEXT DEFAULT (datetime('now','localtime'))
 );
+CREATE TABLE IF NOT EXISTS inscricoes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nome TEXT NOT NULL,
+  email TEXT NOT NULL,
+  telefone TEXT NOT NULL,
+  cargo TEXT,
+  igreja TEXT,
+  aluno_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TEXT DEFAULT (datetime('now','localtime'))
+);
 `);
 
 // ── Configurações padrão
@@ -138,6 +148,7 @@ const cfgPadrao = {
   data_inicio: '',
   dias_antes_liberar: '7',  // aula abre X dias antes do encontro (pré-estudo)
   sequencial: '1',          // aluno precisa concluir a anterior para abrir a próxima
+  inscricoes_abertas: '1',  // página pública /inscricao aceita novas inscrições
 };
 const insCfg = db.prepare('INSERT OR IGNORE INTO config (chave, valor) VALUES (?, ?)');
 for (const [k, v] of Object.entries(cfgPadrao)) insCfg.run(k, v);
