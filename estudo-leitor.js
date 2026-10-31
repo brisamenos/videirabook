@@ -2,10 +2,9 @@
 (function () {
   const { esc, $ } = VB;
   const CORES = [['amarelo', 'Amarelo'], ['verde', 'Verde'], ['azul', 'Azul'], ['rosa', 'Rosa'], ['laranja', 'Laranja']];
-  const ICONE_NOTA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c2.7-1.3 5.3-1.3 8 0 2.7-1.3 5.3-1.3 8 0V19c-2.7-1.3-5.3-1.3-8 0-2.7-1.3-5.3-1.3-8 0z"/><path d="M12 5.5V19"/></svg>';
 
   // ── Texto do versículo, sem número, botões e notas (é sobre ele que as posições dos grifos são contadas)
-  const FORA = 'sup, button, .nota-texto, .marca-estudo';
+  const FORA = 'sup, button, .nota-texto';
   function textos(p) {
     const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT, { acceptNode: n => n.parentElement.closest(FORA) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
     const lista = []; while (w.nextNode()) lista.push(w.currentNode); return lista;
@@ -83,7 +82,7 @@
   }
 
   // ── Leitor: chamado pelo leitor da Bíblia depois de desenhar o capítulo
-  VB.estudoLeitor = async function (corpo, { livro, cap, versao }) {
+  VB.estudoLeitor = async function (corpo, { livro, cap, versao, estudo }) {
     if (!VB.me || !VB.me.estudo) return;
     const texto = corpo.querySelector('.biblia-texto'); if (!texto) return;
     texto.classList.add('grifavel');
@@ -139,85 +138,41 @@
       });
     });
 
-    await Promise.all([carregarGrifos(), montarNotas(corpo, texto, { livro, cap })]);
+    await Promise.all([carregarGrifos(), estudo ? montarNotas(corpo, texto, estudo, { livro, cap }) : null]);
   };
 
-  // ── Notas de estudo no rodapé
-  let MODULOS = null;
-  async function montarNotas(corpo, texto, { livro, cap }) {
-    try { MODULOS = MODULOS || await VB.api('/api/estudo'); } catch { MODULOS = []; }
-    corpo.querySelector('.estudo')?.remove();
-    if (!MODULOS.length) return;
-    let cod = VB.pref.get('estudo_cod', MODULOS[0].cod);
-    if (!MODULOS.some(m => m.cod === cod)) cod = MODULOS[0].cod;
-    const ligado = VB.pref.get('estudo_ligado', '1') === '1';
-
-    const sec = document.createElement('section');
-    sec.className = 'estudo'; sec.setAttribute('aria-label', 'Notas da Bíblia de estudo');
-    const credito = corpo.querySelector('.biblia-credito');
-    (credito || texto).after(sec);
-
-    const cab = mod => `<header class="estudo-cab">
-        <div><h2>Notas de estudo</h2><p>${esc(mod.titulo)}</p></div>
-        <div class="estudo-ops">
-          ${MODULOS.length > 1 ? `<select class="input mini" id="estudo-mod" aria-label="Bíblia de estudo">${MODULOS.map(m => `<option value="${esc(m.cod)}"${m.cod === mod.cod ? ' selected' : ''}>${esc(m.sigla)}</option>`).join('')}</select>` : ''}
-          <button type="button" class="btn sec mini" id="estudo-ligar" aria-pressed="${ligado}">${ligado ? 'Ocultar notas' : 'Mostrar notas'}</button>
-        </div></header>`;
-
-    const desenhar = async () => {
-      const mod = MODULOS.find(m => m.cod === cod);
-      texto.querySelectorAll('.marca-estudo').forEach(a => a.remove());
-      texto.querySelectorAll('p.tem-nota').forEach(p => p.classList.remove('tem-nota'));
-      if (!ligado) { sec.innerHTML = cab(mod); ligar(); return; }
-      sec.innerHTML = cab(mod) + '<div class="carregando"></div>'; ligar();
-      let d;
-      try { d = await VB.api(`/api/estudo/${encodeURIComponent(cod)}/${livro}/${cap}`); }
-      catch (e) { sec.querySelector('.carregando').outerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
-      const artigos = [], notas = [];
-      d.notas.forEach(n => (n.artigo ? artigos : notas).push(n));
-      const refDe = n => { const b = n.html.match(/^\s*<p>\s*<b>([\d.,\-–—\s]+)<\/b>/); if (b) return b[1].trim();
-        return n.capAte && n.capAte !== n.cap ? `${n.cap}.${n.de}–${n.capAte}` : `${n.cap}.${n.de || 1}${n.ate > n.de && n.ate < 150 ? `-${n.ate}` : ''}`; };
-      const semRef = h => h.replace(/^\s*<p>\s*<b>[\d.,\-–—\s]+<\/b>\s*/, '<p>');
+  // ── Bíblia de estudo: a nota fica aberta logo abaixo do versículo comentado
+  async function montarNotas(corpo, texto, estudo, { livro, cap }) {
+    let d;
+    try { d = await VB.api(`/api/estudo/${encodeURIComponent(estudo.cod)}/${livro}/${cap}`); }
+    catch (e) { texto.insertAdjacentHTML('afterbegin', `<p class="erro-msg">${esc(e.message)}</p>`); return; }
+    if (!document.body.contains(texto)) return;
+    const refDe = n => { const b = n.html.match(/^\s*<p>\s*<b>([\d.,\-–—\s]+)<\/b>/); if (b) return b[1].trim();
+      return `${n.cap}.${n.de || 1}${n.ate > n.de && n.ate < 150 ? `-${n.ate}` : ''}`; };
+    const semRef = h => h.replace(/^\s*<p>\s*<b>[\d.,\-–—\s]+<\/b>\s*/, '<p>');
+    // agrupa por versículo
+    const porVerso = new Map();
+    for (const n of d.notas) { const v = Math.max(1, n.de || 1); if (!porVerso.has(v)) porVerso.set(v, []); porVerso.get(v).push(n); }
+    for (const [v, lista] of porVerso) {
+      let ancora = texto.querySelector(`p#v${v}`);
+      if (!ancora) ancora = [...texto.querySelectorAll('p[id^="v"]')].pop();
+      if (!ancora) continue;
+      if (ancora.nextElementSibling && ancora.nextElementSibling.classList.contains('comparado')) ancora = ancora.nextElementSibling;
+      const notas = lista.filter(n => !n.artigo), artigos = lista.filter(n => n.artigo);
       let html = '';
-      if (d.intro && d.intro.length) {
-        html += `<details class="estudo-bloco estudo-intro"><summary><span class="estudo-tipo">Introdução ao livro</span><strong>${esc(VB.LIVROS[livro][0])}</strong></summary>
-          <div class="estudo-texto">${d.intro.join('')}</div></details>`;
-      }
+      if (notas.length) html += `<aside class="nota-estudo" aria-label="Nota de estudo">${notas.map(n => `<div class="ne"><span class="ne-ref">${esc(refDe(n))}</span><div class="estudo-texto">${semRef(n.html)}</div></div>`).join('')}</aside>`;
       html += artigos.map(a => `<details class="estudo-bloco estudo-artigo"><summary><span class="estudo-tipo">${esc(a.categoria || 'Artigo')}</span><strong>${esc(a.titulo || 'Artigo')}</strong></summary>
-          <div class="estudo-texto">${a.html}</div></details>`).join('');
-      if (notas.length) {
-        html += `<ol class="estudo-notas">${notas.map((n, i) => `<li id="ne-${i}" data-de="${n.de}" data-ate="${n.ate}">
-          <a class="ne-ref" href="#v${n.de || 1}" data-ir-verso="${n.de || 1}">${refDe(n)}</a>
-          <div class="estudo-texto">${semRef(n.html)}</div></li>`).join('')}</ol>`;
-      }
-      if (!html) html = `<p class="muted estudo-vazio">Não há notas de estudo para ${esc(VB.LIVROS[livro][0])} ${cap}.</p>`;
-      html += d.creditos ? `<p class="pequeno muted estudo-credito">${esc(d.titulo)} — ${esc(d.creditos)}</p>` : '';
-      sec.querySelector('.carregando').outerHTML = html;
-      // marca nos versículos que têm nota
-      notas.forEach((n, i) => {
-        const p = texto.querySelector(`p#v${n.de || 1}`); if (!p) return;
-        p.classList.add('tem-nota');
-        if (p.querySelector('.marca-estudo')) return;
-        const a = document.createElement('a');
-        a.className = 'marca-estudo'; a.href = `#ne-${i}`; a.dataset.ne = i;
-        a.setAttribute('aria-label', `Nota de estudo sobre ${refDe(n)}`); a.title = 'Nota de estudo';
-        a.innerHTML = ICONE_NOTA;
-        const ac = p.querySelector('.acao-verso'); ac ? ac.before(a) : p.appendChild(a);
-      });
-    };
-    const ligar = () => {
-      sec.querySelector('#estudo-ligar')?.addEventListener('click', () => { VB.pref.set('estudo_ligado', ligado ? '0' : '1'); montarNotas(corpo, texto, { livro, cap }); });
-      sec.querySelector('#estudo-mod')?.addEventListener('change', e => { VB.pref.set('estudo_cod', e.target.value); montarNotas(corpo, texto, { livro, cap }); });
-    };
-    await desenhar();
+        <div class="estudo-texto">${a.html}</div></details>`).join('');
+      ancora.insertAdjacentHTML('afterend', html);
+    }
+    if (d.intro && d.intro.length) {
+      texto.insertAdjacentHTML('afterbegin', `<details class="estudo-bloco estudo-intro"><summary><span class="estudo-tipo">Introdução ao livro</span><strong>${esc(VB.LIVROS[livro][0])}</strong></summary>
+        <div class="estudo-texto">${d.intro.join('')}</div></details>`);
+    }
+    const credito = corpo.querySelector('.biblia-credito');
+    if (credito) credito.insertAdjacentHTML('afterbegin', `${esc(d.titulo)}${d.creditos ? ` — ${esc(d.creditos)}` : ''}<br>Texto bíblico: `);
   }
-  // Ir da marca do versículo para a nota e voltar
-  const piscar = el => { el.classList.remove('piscar'); void el.offsetWidth; el.classList.add('piscar'); };
   document.addEventListener('click', e => {
-    const m = e.target.closest('a.marca-estudo');
-    if (m) { e.preventDefault(); const n = document.getElementById(`ne-${m.dataset.ne}`); if (n) { n.scrollIntoView({ block: 'center', behavior: 'smooth' }); piscar(n); } return; }
-    const r = e.target.closest('a.ne-ref[data-ir-verso]');
-    if (r) { e.preventDefault(); const p = document.getElementById(`v${r.dataset.irVerso}`); if (p) { p.scrollIntoView({ block: 'center', behavior: 'smooth' }); piscar(p); } return; }
     if (barra && !e.target.closest('.grifador, mark.grifo')) fecharBarra();
   });
   addEventListener('hashchange', fecharBarra);

@@ -35,6 +35,11 @@ function registrarEmbutidos() {
   }
 }
 registrarEmbutidos();
+// Bíblias de estudo importadas antes de existir a coluna "base": descobre o texto pelo título
+for (const r of db.prepare("SELECT id, titulo, descricao FROM biblioteca WHERE tipo = 'comentario' AND estudo = 1 AND (base IS NULL OR base = '')").all()) {
+  const t = `${r.titulo} ${r.descricao || ''}`;
+  db.prepare('UPDATE biblioteca SET base = ? WHERE id = ?').run(/\bNVI\b/i.test(t) ? 'nvi' : /\bNVT\b/i.test(t) ? 'nvt' : /\bARA\b|Atualizada/i.test(t) ? 'ara' : 'acf', r.id);
+}
 // Traz de volta as Bíblias que vêm com o app e foram excluídas
 function restaurarEmbutidos() { setConfig('embutidos_removidos', ''); registrarEmbutidos(); }
 
@@ -48,8 +53,14 @@ function padrao() {
   const c = getConfig().biblia_padrao; const ativas = listar('biblia');
   return (ativas.find(b => b.cod === c) || ativas[0] || {}).cod || 'alm';
 }
+// Bíblia de estudo: o texto vem da Bíblia base dela (ex.: BEA -> NVI)
+function baseDoEstudo(r) {
+  const ativas = listar('biblia');
+  return ativas.find(b => b.cod === r.base) || ativas.find(b => b.cod === 'acf') || ativas.find(b => b.cod === padrao()) || ativas[0];
+}
 function biblia(cod) {
-  const r = porCod(cod);
+  let r = porCod(cod);
+  if (r && r.tipo === 'comentario' && r.estudo && r.ativo) r = baseDoEstudo(r);
   if (r && r.tipo === 'biblia' && r.ativo && fs.existsSync(caminho(r))) return r;
   const p = porCod(padrao()); return p && fs.existsSync(caminho(p)) ? p : null;
 }
@@ -166,9 +177,12 @@ function importar(arquivoTemp, nomeOriginal) {
   const titulo = info.titulo && !/^©/.test(info.titulo) ? info.titulo : (info.descricao || base);
   const creditos = info.editora || info.autor || (/ - /.test(titulo) ? titulo.split(' - ').pop() : '') || (/©/.test(info.titulo) ? info.titulo : '') || (/©/.test(info.comentarios) ? info.comentarios.slice(0, 160) : '');
   const estudo = info.tipo === 'comentario' && (info.estudo || /estudo/i.test(nomeOriginal || '')) ? 1 : 0;
-  const id = db.prepare(`INSERT INTO biblioteca (cod, tipo, formato, arquivo, sigla, titulo, creditos, descricao, ordem, tamanho, estudo)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(cod, info.tipo, info.formato, `dados:${destino}`, sigla, titulo.slice(0, 120), creditos.slice(0, 200),
-    (info.descricao || '').slice(0, 400), ordem, fs.statSync(path.join(PASTA_DADOS, destino)).size, estudo).lastInsertRowid;
+  const pista = `${info.base || ''} ${info.titulo || ''} ${info.descricao || ''} ${nomeOriginal || ''}`;
+  const textoBase = !estudo ? null : (info.base && porCod(info.base) ? info.base
+    : /\bNVI\b/i.test(pista) ? 'nvi' : /\bNVT\b/i.test(pista) ? 'nvt' : /\bARA\b|Atualizada/i.test(pista) ? 'ara' : /\bKJ/i.test(pista) ? 'kjf' : 'acf');
+  const id = db.prepare(`INSERT INTO biblioteca (cod, tipo, formato, arquivo, sigla, titulo, creditos, descricao, ordem, tamanho, estudo, base)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`).run(cod, info.tipo, info.formato, `dados:${destino}`, sigla, titulo.slice(0, 120), creditos.slice(0, 200),
+    (info.descricao || '').slice(0, 400), ordem, fs.statSync(path.join(PASTA_DADOS, destino)).size, estudo, textoBase).lastInsertRowid;
   info.estudo = !!estudo;
   return { id, cod, ...info };
 }
@@ -200,4 +214,4 @@ function bibliaComStrong() {
 aoRemover.push(() => { comStrong = undefined; });
 function brutoComStrong(l, c, v) { const r = bibliaComStrong(); if (!r) return { texto: '', sigla: '' }; try { return { texto: ms.versoBruto(caminho(r), r.formato, l, c, v), sigla: r.sigla }; } catch { return { texto: '', sigla: '' }; } }
 
-module.exports = { notasEstudo, brutoComStrong, comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };
+module.exports = { baseDoEstudo, notasEstudo, brutoComStrong, comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };

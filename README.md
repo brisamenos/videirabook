@@ -84,12 +84,11 @@ Em **Sermões com IA**, o professor salva a chave da OpenAI, escolhe o modelo, d
 
 ## Bíblia de estudo e grifos
 
-Uma Bíblia de estudo é um módulo de comentário do MySword (`.cmt.mybible`) marcado como **Bíblia de estudo**. Ela não aparece na lista comum de comentários: as notas ficam no rodapé de cada capítulo, para quem o professor liberar.
+Uma Bíblia de estudo é lida como uma Bíblia: ela aparece junto com as versões (ARA, NVI…) e mostra o texto bíblico com as notas de estudo abertas logo abaixo de cada versículo comentado. Artigos ficam num quadro que abre ao toque, e a introdução do livro aparece no capítulo 1.
 
-- Importe o arquivo em **Módulos bíblicos**. Se o nome do arquivo tiver `estudo` (por exemplo `BEA-NVI.estudo.cmt.mybible`) ou os detalhes do módulo disserem “Bíblia de Estudo”, ele já entra marcado. Senão, marque em **Bíblia de estudo**.
-- Em **Bíblia de estudo**, o professor marca quais alunos podem usar. O professor sempre tem acesso.
-- No leitor, quem está liberado vê, no fim do capítulo, a introdução do livro (no capítulo 1), os artigos e as notas versículo por versículo. Um pequeno ícone no versículo leva à nota, e a referência da nota volta ao versículo. As referências bíblicas dentro das notas abrem o versículo ao toque.
-- **Grifar:** selecione um trecho do texto e escolha a cor (amarelo, verde, azul, rosa ou laranja). Toque num grifo para trocar a cor ou tirar. Cada pessoa vê só os próprios grifos, guardados por versão da Bíblia.
+- O arquivo é um módulo do MySword (`.cmt.mybible`) com `estudo` no nome (ex.: `BEA-NVI.estudo.cmt.mybible`) ou com “Bíblia de Estudo” nos detalhes. Importe em **Módulos bíblicos**; ele aparece no bloco **Bíblias de estudo**, separado dos comentários.
+- Em **Bíblia de estudo**, o professor escolhe qual Bíblia instalada dá o texto de cada uma (ex.: a Arqueológica usa a NVI) e marca quais alunos podem usar. O professor sempre tem acesso; quem não está liberado não vê as Bíblias de estudo.
+- **Grifar:** selecione um trecho do texto e escolha a cor (amarelo, verde, azul, rosa ou laranja). Toque num grifo para trocar a cor ou tirar. Cada pessoa vê só os próprios grifos, guardados por versão.
 
 ## Regras de liberação
 

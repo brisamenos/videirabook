@@ -47,7 +47,7 @@ function identificar(arquivo) {
     if (det) {
       const r = d.prepare(`SELECT * FROM "${det}" LIMIT 1`).get() || {};
       const v = k => { const c = Object.keys(r).find(x => x.toLowerCase() === k); return c ? r[c] : null; };
-      Object.assign(info, { titulo: v('title'), sigla: v('abbreviation'), descricao: v('description'), comentarios: v('comments'), editora: v('publisher'), idioma: v('language'), autor: v('author'), estudo: /estudo|study/i.test(String(v('category') || v('type') || '')) || String(v('estudo') || '') === '1' });
+      Object.assign(info, { titulo: v('title'), sigla: v('abbreviation'), descricao: v('description'), comentarios: v('comments'), editora: v('publisher'), idioma: v('language'), autor: v('author'), base: v('base') || v('bible'), estudo: /estudo|study/i.test(String(v('category') || v('type') || '')) || String(v('estudo') || '') === '1' });
     } else if (temTabela(ts, 'info')) {
       const o = {}; for (const r of d.prepare('SELECT name, value FROM info').all()) o[String(r.name).toLowerCase()] = r.value;
       Object.assign(info, { titulo: o.description, sigla: null, descricao: o.detailed_info, editora: o.origin, idioma: o.language });
@@ -68,7 +68,7 @@ function identificar(arquivo) {
     else quantos = d.prepare(formato === 'mysword' ? 'SELECT COUNT(*) n FROM commentary' : 'SELECT COUNT(*) n FROM commentaries').get().n;
     const limpar = s => s ? textoPuro(s).slice(0, 400) : '';
     return { tipo, formato, quantos, titulo: limpar(info.titulo), sigla: limpar(info.sigla).slice(0, 20), descricao: limpar(info.descricao),
-      comentarios: limpar(info.comentarios), editora: limpar(info.editora), autor: limpar(info.autor), estudo: !!info.estudo };
+      comentarios: limpar(info.comentarios), editora: limpar(info.editora), autor: limpar(info.autor), estudo: !!info.estudo, base: info.base ? String(info.base).toLowerCase().slice(0, 20) : '' };
   } finally { d.close(); }
 }
 

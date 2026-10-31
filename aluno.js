@@ -440,7 +440,7 @@
   });
 
   // ── Bíblia: ARA, ACF, NVI, NVT, KJF e Almeida 1819 lidas dentro do app; ARC numa janela do Bíblia Online
-  const nomeVersao = c => (VB.VERSOES.find(v => v[0] === c) || [])[1] || '';
+  const nomeVersao = c => (VB.VERSOES.find(v => v[0] === c) || [])[1] || (VB.estudoPorCod(c) || {}).sigla || '';
   const livroPorSlug = slug => VB.LIVROS.find(l => l[2] === slug);
   let embutirOk;   // o site Bíblia Online pode ser aberto dentro do app?
   const podeEmbutir = async () => {
@@ -451,7 +451,8 @@
     return VB.urlBiblia(l, cap, VB.versaoBiblia());
   };
   const chipsVersao = () => `<div class="versoes" role="radiogroup" aria-label="Versão da Bíblia">
-    ${VB.VERSOES.map(v => `<button type="button" role="radio" class="versao" aria-checked="${v[0] === VB.versaoBiblia()}" data-versao="${v[0]}"><b>${v[1]}</b><span>${v[2]}</span></button>`).join('')}</div>`;
+    ${VB.VERSOES.map(v => `<button type="button" role="radio" class="versao" aria-checked="${v[0] === VB.versaoBiblia()}" data-versao="${v[0]}"><b>${v[1]}</b><span>${v[2]}</span></button>`).join('')}
+    ${VB.ESTUDOS.map(e => `<button type="button" role="radio" class="versao versao-estudo" aria-checked="${e.cod === VB.versaoBiblia()}" data-versao="${esc(e.cod)}"><b>${esc(e.sigla)}</b><span>${esc(e.titulo)}${e.baseSigla ? ` · texto ${esc(e.baseSigla)}` : ''}</span></button>`).join('')}</div>`;
   const ligarChips = aoTrocar => $$('.versao').forEach(b => b.addEventListener('click', () => {
     VB.pref.set('versao', b.dataset.versao);
     $$('.versao').forEach(x => x.setAttribute('aria-checked', String(x === b)));
@@ -557,7 +558,7 @@
         if (VB.COMENTARIOS.length) VB.api(`/api/comentarios/${idx}/${cap}/marcas`).then(vs => vs.forEach(n => {
           const b = corpo.querySelector(`.acao-verso[data-acao-v="${n}"]`); if (b) { b.classList.add('tem-com'); b.title = 'Tem comentário'; }
         })).catch(() => {});
-        if (VB.me && VB.me.estudo && VB.estudoLeitor) VB.estudoLeitor(corpo, { livro: idx, cap, versao: v });
+        if (VB.me && VB.me.estudo && VB.estudoLeitor) VB.estudoLeitor(corpo, { livro: idx, cap, versao: v, estudo: VB.estudoPorCod(v) });
         return;
       }
       const url = urlExterna(livro, cap);

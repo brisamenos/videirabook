@@ -184,12 +184,12 @@
     carregando('modulos'); document.title = 'Módulos bíblicos · VideiraBook';
     const { padrao, lista, removidos, original } = await VB.api('/api/admin/biblioteca');
     const bloco = (tipo, titulo, vazio) => {
-      const itens = lista.filter(m => m.tipo === tipo);
+      const itens = tipo === 'estudo' ? lista.filter(m => m.tipo === 'comentario' && m.estudo) : lista.filter(m => m.tipo === tipo && !(tipo === 'comentario' && m.estudo));
       return `<section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .8rem">${titulo}</h3>
         ${itens.length ? `<div class="tabela-wrap" style="border:0"><table class="tabela"><thead><tr><th style="width:84px">Ordem</th><th>Módulo</th>${tipo === 'biblia' ? '<th>Padrão</th>' : ''}<th>Ativo</th><th></th></tr></thead><tbody>
         ${itens.map((m, i) => `<tr${m.ativo ? '' : ' style="opacity:.55"'}>
           <td><div class="acoes" style="justify-content:flex-start"><button class="icone-btn" data-mover="${m.cod}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Subir">${icone.cima}</button><button class="icone-btn" data-mover="${m.cod}" data-dir="1" ${i < itens.length - 1 ? '' : 'disabled'} aria-label="Descer">${icone.baixo}</button></div></td>
-          <td><strong>${esc(m.sigla)}</strong> — ${esc(m.titulo)}<br><small class="muted">${esc(m.creditos || 'sem créditos')} · ${m.formato === 'json' ? 'texto do app' : m.formato === 'mybible' ? 'MyBible' : 'MySword'} · ${tamanho(m.tamanho)}${m.embutido ? ' · vem com o app' : ''}${m.estudo ? ' · <a href="#/p/estudo"><span class="etiqueta ok">Bíblia de estudo</span></a>' : ''}${m.existe ? '' : ' · <span style="color:var(--perigo)">arquivo não encontrado</span>'}</small></td>
+          <td><strong>${esc(m.sigla)}</strong> — ${esc(m.titulo)}<br><small class="muted">${esc(m.creditos || 'sem créditos')} · ${m.formato === 'json' ? 'texto do app' : m.formato === 'mybible' ? 'MyBible' : 'MySword'} · ${tamanho(m.tamanho)}${m.embutido ? ' · vem com o app' : ''}${m.estudo ? ` · texto ${esc((lista.find(b => b.cod === m.base) || {}).sigla || 'ACF')} · <a href="#/p/estudo">liberar e configurar</a>` : ''}${m.existe ? '' : ' · <span style="color:var(--perigo)">arquivo não encontrado</span>'}</small></td>
           ${tipo === 'biblia' ? `<td><input type="radio" name="padrao" value="${m.cod}" ${m.cod === padrao ? 'checked' : ''} ${m.ativo ? '' : 'disabled'} aria-label="Versão padrão"></td>` : ''}
           <td><label class="chave"><input type="checkbox" data-ativo="${m.cod}" ${m.ativo ? 'checked' : ''} aria-label="Ativo"></label></td>
           <td><div class="acoes"><button class="icone-btn" data-editar="${m.cod}" title="Editar nome e créditos" aria-label="Editar">${icone.lapis}</button>
@@ -201,7 +201,8 @@
       <div id="envio" hidden class="painel" style="margin-bottom:16px"><p style="margin:0 0 .5rem" id="envio-txt">Enviando…</p>${VB.barra(0)}</div>
       ${bloco('biblia', 'Bíblias', 'Nenhuma Bíblia instalada.')}
       ${bloco('dicionario', 'Dicionários', 'Nenhum dicionário ainda. Importe um arquivo .dct.mybible do MySword (por exemplo, o Dicionário Wycliffe).')}
-      ${bloco('comentario', 'Comentários', 'Nenhum comentário ainda. Importe arquivos .cmt.mybible do MySword. Eles aparecem no botão de cada versículo e entram na pesquisa dos sermões. Os marcados como Bíblia de estudo aparecem no rodapé do capítulo, só para quem você liberar.')}
+      ${bloco('estudo', 'Bíblias de estudo', 'Nenhuma Bíblia de estudo ainda. Importe o arquivo .estudo.cmt.mybible. Ela aparece junto com as versões da Bíblia, com as notas abertas embaixo de cada versículo, só para quem você liberar em Bíblia de estudo.')}
+      ${bloco('comentario', 'Comentários', 'Nenhum comentário ainda. Importe arquivos .cmt.mybible do MySword. Eles aparecem no botão de cada versículo e entram na pesquisa dos sermões.')}
       <section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .4rem">Hebraico e grego</h3>
         ${original ? '<p style="margin:0" class="pequeno"><span class="etiqueta ok">Instalado</span> O texto original aparece na opção Hebraico/Grego de cada versículo.</p>'
           : '<p style="margin:0" class="pequeno"><span class="etiqueta nova">Não instalado</span> Envie o arquivo <b>original.db</b> (ou <b>original.db.gz</b>) pelo botão Importar módulo.</p>'}</section>
@@ -264,21 +265,26 @@
   VB.registrar(/^\/p\/estudo$/, 'professor', async () => {
     carregando('estudo'); document.title = 'Bíblia de estudo · VideiraBook';
     const d = await VB.api('/api/admin/estudo');
-    $('#conteudo').innerHTML = `${cabecalho('Bíblia de estudo', 'Notas de estudo no rodapé de cada capítulo e grifos coloridos no texto. Só quem você liberar vê esta função.', `<a class="btn sec" href="#/biblia">${icone.livro}Abrir a Bíblia</a>`)}
+    $('#conteudo').innerHTML = `${cabecalho('Bíblia de estudo', 'Bíblias com as notas de estudo abertas embaixo de cada versículo, e grifos coloridos no texto. Só quem você liberar vê esta função.', `<a class="btn sec" href="#/biblia">${icone.livro}Abrir a Bíblia</a>`)}
       <div class="ia-grade">
-      <section class="painel"><h3 style="margin-top:0">Módulos de estudo</h3>
-        <p class="muted pequeno" style="margin-top:0">Marque os comentários que devem aparecer como Bíblia de estudo. Eles saem da lista comum de comentários e ficam só para quem estiver liberado.</p>
-        ${d.modulos.length ? `<div class="lista-ia">${d.modulos.map(m => `<label class="chave linha-ia"><input type="checkbox" data-estudo-mod="${esc(m.cod)}" ${m.estudo ? 'checked' : ''}><span><strong>${esc(m.titulo)}</strong> <small class="muted">${esc(m.sigla)}${m.ativo ? '' : ' · desativado'}</small></span></label>`).join('')}</div>`
-          : `<div class="vazio" style="border:0"><strong>Nenhum comentário instalado</strong>Importe o módulo da Bíblia de estudo (.cmt.mybible) em <a href="#/p/modulos">Módulos bíblicos</a>.</div>`}
+      <section class="painel"><h3 style="margin-top:0">Bíblias de estudo</h3>
+        <p class="muted pequeno" style="margin-top:0">Cada Bíblia de estudo aparece junto com as versões da Bíblia. Escolha qual texto bíblico ela usa; as notas ficam abertas embaixo de cada versículo comentado.</p>
+        ${d.modulos.filter(m => m.estudo).map(m => `<div class="linha-estudo"><div><strong>${esc(m.titulo)}</strong> <small class="muted">${esc(m.sigla)}${m.ativo ? '' : ' · desativado'}</small></div>
+          <label class="campo" style="margin:0"><span>Texto bíblico</span><select class="input" data-estudo-base="${esc(m.cod)}">${d.biblias.map(b => `<option value="${esc(b.cod)}"${b.cod === m.base ? ' selected' : ''}>${esc(b.sigla)} — ${esc(b.titulo)}</option>`).join('')}</select></label></div>`).join('')
+          || `<div class="vazio" style="border:0"><strong>Nenhuma Bíblia de estudo instalada</strong>Importe o arquivo .estudo.cmt.mybible em <a href="#/p/modulos">Módulos bíblicos</a>.</div>`}
+        ${d.modulos.some(m => !m.estudo) ? `<details style="margin-top:1rem"><summary class="pequeno muted" style="cursor:pointer">Transformar um comentário em Bíblia de estudo</summary>
+          <div class="lista-ia" style="margin-top:.5rem">${d.modulos.filter(m => !m.estudo).map(m => `<label class="chave linha-ia"><input type="checkbox" data-estudo-mod="${esc(m.cod)}"><span><strong>${esc(m.titulo)}</strong> <small class="muted">${esc(m.sigla)}</small></span></label>`).join('')}</div></details>` : ''}
+        ${d.modulos.some(m => m.estudo) ? `<p class="pequeno muted" style="margin:.8rem 0 0">Para voltar uma Bíblia de estudo a comentário comum: <span>${d.modulos.filter(m => m.estudo).map(m => `<button class="btn sec mini" data-estudo-tirar="${esc(m.cod)}">${esc(m.sigla)}</button>`).join(' ')}</span></p>` : ''}
       </section>
       <section class="painel"><h3 style="margin-top:0">Quem pode usar</h3>
         <p class="muted pequeno" style="margin-top:0">Marque os alunos que poderão ver as notas e grifar o texto. Você, professor, sempre tem acesso.</p>
         <input class="input" id="busca-est" placeholder="Buscar aluno" style="margin-bottom:.6rem" aria-label="Buscar aluno">
         <div class="lista-ia">${d.usuarios.length ? d.usuarios.map(u => `<label class="chave linha-est" data-nome="${esc(VB.normalizar(u.nome + ' ' + u.usuario))}"><input type="checkbox" data-estudo-u="${u.id}" ${u.pode_estudo ? 'checked' : ''}><span><strong>${esc(u.nome)}</strong> <small class="muted">${esc(u.usuario)}${u.ativo ? '' : ' · desativado'}</small></span></label>`).join('') : '<p class="muted">Nenhum aluno cadastrado.</p>'}</div>
       </section></div>`;
-    $$('[data-estudo-mod]').forEach(c => c.addEventListener('change', async () => {
-      try { await VB.api(`/api/admin/estudo/modulos/${encodeURIComponent(c.dataset.estudoMod)}`, { method: 'PUT', body: { estudo: c.checked } }); VB.toast(c.checked ? 'Marcado como Bíblia de estudo' : 'Voltou para a lista de comentários'); await VB.carregarBiblioteca(); } catch (er) { VB.erro(er); c.checked = !c.checked; }
-    }));
+    const mudar = async (cod, corpo, msg) => { try { await VB.api(`/api/admin/estudo/modulos/${encodeURIComponent(cod)}`, { method: 'PUT', body: corpo }); VB.toast(msg); await VB.carregarBiblioteca(); VB.rota(); } catch (er) { VB.erro(er); } };
+    $$('[data-estudo-mod]').forEach(c => c.addEventListener('change', () => mudar(c.dataset.estudoMod, { estudo: true }, 'Agora é uma Bíblia de estudo')));
+    $$('[data-estudo-tirar]').forEach(b => b.addEventListener('click', () => mudar(b.dataset.estudoTirar, { estudo: false }, 'Voltou para a lista de comentários')));
+    $$('[data-estudo-base]').forEach(sel => sel.addEventListener('change', () => mudar(sel.dataset.estudoBase, { base: sel.value }, 'Texto bíblico alterado')));
     $$('[data-estudo-u]').forEach(c => c.addEventListener('change', async () => {
       try { await VB.api(`/api/admin/estudo/usuarios/${c.dataset.estudoU}`, { method: 'PUT', body: { pode_estudo: c.checked } }); VB.toast(c.checked ? 'Acesso liberado' : 'Acesso retirado'); } catch (er) { VB.erro(er); c.checked = !c.checked; }
     }));

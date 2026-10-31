@@ -187,6 +187,8 @@ if (!db.prepare('PRAGMA table_info(usuarios)').all().some(c => c.name === 'pode_
 // Bíblia de estudo: módulos marcados como "estudo" e alunos liberados pelo professor
 if (!db.prepare('PRAGMA table_info(usuarios)').all().some(c => c.name === 'pode_estudo')) db.exec('ALTER TABLE usuarios ADD COLUMN pode_estudo INTEGER NOT NULL DEFAULT 0');
 if (!db.prepare('PRAGMA table_info(biblioteca)').all().some(c => c.name === 'estudo')) db.exec('ALTER TABLE biblioteca ADD COLUMN estudo INTEGER NOT NULL DEFAULT 0');
+// Bíblia de estudo: qual Bíblia instalada dá o texto (ex.: a Arqueológica usa a NVI)
+if (!db.prepare('PRAGMA table_info(biblioteca)').all().some(c => c.name === 'base')) db.exec('ALTER TABLE biblioteca ADD COLUMN base TEXT');
 // Grifos: trechos marcados por cada pessoa (posição em caracteres dentro do texto do versículo)
 db.exec(`CREATE TABLE IF NOT EXISTS grifos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

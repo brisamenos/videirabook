@@ -289,7 +289,7 @@ window.VB = (function () {
   VB.VERSOES = [['ara', 'ARA', 'Almeida Revista e Atualizada', true], ['acf', 'ACF', 'Almeida Corrigida Fiel', true],
     ['nvi', 'NVI', 'Nova Versão Internacional', true], ['nvt', 'NVT', 'Nova Versão Transformadora', true],
     ['kjf', 'KJF', 'King James Fiel 1611', true], ['alm', 'Almeida', 'Almeida 1819', true]];
-  VB.DICIONARIOS = []; VB.COMENTARIOS = []; VB.bibliaPadrao = 'ara';
+  VB.DICIONARIOS = []; VB.COMENTARIOS = []; VB.ESTUDOS = []; VB.bibliaPadrao = 'ara';
   VB.normalizar = t => String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
   VB.carregarBiblioteca = async function () {
     try {
@@ -297,9 +297,11 @@ window.VB = (function () {
       if (b.biblias.length) VB.VERSOES = b.biblias.map(x => [x.cod, x.sigla, x.titulo, true]);
       if (!VB.VERSOES.some(v => /^arc$/i.test(v[1]))) VB.VERSOES.push(['arc', 'ARC', 'Almeida Revista e Corrigida · abre no site', false]);
       VB.DICIONARIOS = b.dicionarios; VB.COMENTARIOS = b.comentarios || []; VB.bibliaPadrao = b.padrao;
+      VB.ESTUDOS = b.estudos || [];      // Bíblias de estudo liberadas para esta pessoa (texto da Bíblia base + notas)
     } catch { /* fica com a lista padrão */ }
   };
-  VB.versaoInterna = c => !!(VB.VERSOES.find(v => v[0] === c) || [])[3];
+  VB.estudoPorCod = c => VB.ESTUDOS.find(e => e.cod === c) || null;
+  VB.versaoInterna = c => !!(VB.VERSOES.find(v => v[0] === c) || [])[3] || !!VB.estudoPorCod(c);
   // [nome, abreviação, código no site, capítulos, outros nomes]
   VB.LIVROS = [
     ['Gênesis', 'Gn', 'gn', 50], ['Êxodo', 'Êx', 'ex', 40, ['Ex']], ['Levítico', 'Lv', 'lv', 27], ['Números', 'Nm', 'nm', 36],
@@ -320,7 +322,7 @@ window.VB = (function () {
     ['Tiago', 'Tg', 'tg', 5], ['1 Pedro', '1 Pe', '1pe', 5], ['2 Pedro', '2 Pe', '2pe', 3], ['1 João', '1 Jo', '1jo', 5],
     ['2 João', '2 Jo', '2jo', 1], ['3 João', '3 Jo', '3jo', 1], ['Judas', 'Jd', 'jd', 1], ['Apocalipse', 'Ap', 'ap', 22],
   ];
-  VB.versaoBiblia = () => { const v = VB.pref.get('versao', VB.bibliaPadrao); return VB.VERSOES.some(x => x[0] === v) ? v : (VB.VERSOES[0] || ['ara'])[0]; };
+  VB.versaoBiblia = () => { const v = VB.pref.get('versao', VB.bibliaPadrao); return VB.VERSOES.some(x => x[0] === v) || VB.estudoPorCod(v) ? v : (VB.VERSOES[0] || ['ara'])[0]; };
   // Texto de um capítulo como parágrafos (títulos de seção, versículo destacado, versão comparada)
   VB.htmlVersos = (d, { ini = 0, fim = 0, destaque = 0, comp = null, acoes = false } = {}) => {
     const fimPar = new Set(d.fim || []), recuo = d.recuo || {};

@@ -77,7 +77,9 @@ module.exports = function (app, P, auth, h) {
   // ── Professor: quem pode usar e quais módulos são Bíblia de estudo
   P.get('/estudo', h((req, res) => {
     res.json({
-      modulos: db.prepare("SELECT cod, sigla, titulo, estudo, ativo FROM biblioteca WHERE tipo = 'comentario' ORDER BY estudo DESC, ordem, id").all(),
+      modulos: db.prepare("SELECT cod, sigla, titulo, estudo, ativo, base FROM biblioteca WHERE tipo = 'comentario' ORDER BY estudo DESC, ordem, id").all()
+        .map(m => ({ ...m, base: m.estudo ? (BIB.baseDoEstudo(m) || {}).cod || '' : '' })),
+      biblias: BIB.listar('biblia').map(b => ({ cod: b.cod, sigla: b.sigla, titulo: b.titulo })),
       usuarios: db.prepare("SELECT id, nome, usuario, pode_estudo, ativo FROM usuarios WHERE papel = 'aluno' ORDER BY nome").all(),
     });
   }));
@@ -86,7 +88,10 @@ module.exports = function (app, P, auth, h) {
     res.json({ ok: true });
   }));
   P.put('/estudo/modulos/:cod', h((req, res) => {
-    const r = db.prepare("UPDATE biblioteca SET estudo = ? WHERE cod = ? AND tipo = 'comentario'").run(req.body && req.body.estudo ? 1 : 0, String(req.params.cod));
+    const b = req.body || {}; const atual = db.prepare("SELECT * FROM biblioteca WHERE cod = ? AND tipo = 'comentario'").get(String(req.params.cod));
+    if (!atual) return res.status(404).json({ erro: 'Comentário não encontrado.' });
+    const base = b.base !== undefined ? String(b.base || '').slice(0, 20) : atual.base;
+    const r = db.prepare("UPDATE biblioteca SET estudo = ?, base = ? WHERE id = ?").run(b.estudo === undefined ? atual.estudo : (b.estudo ? 1 : 0), base, atual.id);
     if (!r.changes) return res.status(404).json({ erro: 'Comentário não encontrado.' });
     res.json({ ok: true });
   }));

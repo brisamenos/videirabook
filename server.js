@@ -749,7 +749,10 @@ app.use('/api/admin', P);
 const BIB = require('./biblioteca');
 const publicoMod = r => ({ cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '' });
 app.get('/api/biblioteca', auth, h((req, res) => {
-  res.json({ padrao: BIB.padrao(), biblias: BIB.listar('biblia').map(publicoMod), dicionarios: BIB.listar('dicionario').map(publicoMod), comentarios: BIB.listar('comentario').map(publicoMod) });
+  const estudos = require('./estudo').podeEstudo(req.user) ? BIB.listar('comentario', { estudo: true }).map(r => {
+    const b = BIB.baseDoEstudo(r) || {}; return { ...publicoMod(r), base: b.cod || '', baseSigla: b.sigla || '' };
+  }) : [];
+  res.json({ padrao: BIB.padrao(), biblias: BIB.listar('biblia').map(publicoMod), dicionarios: BIB.listar('dicionario').map(publicoMod), comentarios: BIB.listar('comentario').map(publicoMod), estudos });
 }));
 app.get('/api/biblia/busca', auth, h((req, res) => {
   const q = String(req.query.q || '').trim();
