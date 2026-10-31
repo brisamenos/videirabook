@@ -557,6 +557,7 @@
         if (VB.COMENTARIOS.length) VB.api(`/api/comentarios/${idx}/${cap}/marcas`).then(vs => vs.forEach(n => {
           const b = corpo.querySelector(`.acao-verso[data-acao-v="${n}"]`); if (b) { b.classList.add('tem-com'); b.title = 'Tem comentário'; }
         })).catch(() => {});
+        if (VB.me && VB.me.estudo && VB.estudoLeitor) VB.estudoLeitor(corpo, { livro: idx, cap, versao: v });
         return;
       }
       const url = urlExterna(livro, cap);

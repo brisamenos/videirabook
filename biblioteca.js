@@ -39,8 +39,10 @@ registrarEmbutidos();
 function restaurarEmbutidos() { setConfig('embutidos_removidos', ''); registrarEmbutidos(); }
 
 const porCod = cod => db.prepare('SELECT * FROM biblioteca WHERE cod = ?').get(cod);
-function listar(tipo, { todos = false } = {}) {
-  return db.prepare(`SELECT * FROM biblioteca WHERE tipo = ? ${todos ? '' : 'AND ativo = 1'} ORDER BY ordem, id`).all(tipo);
+// Os comentários marcados como "Bíblia de estudo" ficam fora da lista comum: só aparecem para quem foi liberado
+function listar(tipo, { todos = false, estudo = false } = {}) {
+  const filtro = tipo === 'comentario' && !todos ? `AND estudo = ${estudo ? 1 : 0}` : '';
+  return db.prepare(`SELECT * FROM biblioteca WHERE tipo = ? ${todos ? '' : 'AND ativo = 1'} ${filtro} ORDER BY ordem, id`).all(tipo);
 }
 function padrao() {
   const c = getConfig().biblia_padrao; const ativas = listar('biblia');
@@ -104,9 +106,23 @@ function imagem(cod, id) {
 }
 
 // Comentários
-function comentario(cod) {
+function comentario(cod, { estudo = false } = {}) {
   const r = porCod(cod);
-  return r && r.tipo === 'comentario' && r.ativo && fs.existsSync(caminho(r)) ? r : null;
+  return r && r.tipo === 'comentario' && r.ativo && !!r.estudo === estudo && fs.existsSync(caminho(r)) ? r : null;
+}
+// Bíblia de estudo: todas as notas de um capítulo, em ordem, e a introdução do livro (capítulo 1)
+function notasEstudo(cod, livro0, cap) {
+  const r = comentario(cod, { estudo: true }); if (!r) return null;
+  let notas = [], intro = [];
+  try { notas = ms.notasDoCapitulo(caminho(r), r.formato, livro0, cap); } catch {}
+  if (cap === 1) { try { intro = ms.introducao(caminho(r), r.formato, livro0).map(h => ms.htmlVerbete(String(h).replace(/^\s*<h3>[\s\S]*?<\/h3>/i, ''), r.cod)); } catch {} }
+  return { cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '', intro,
+    notas: notas.map(n => {
+      // artigos (quadros) começam com <h3>título</h3> e podem ter <h6>categoria</h6>
+      let h = String(n.html || ''); const t = h.match(/^\s*<h3>([\s\S]*?)<\/h3>/i); let titulo = '', categoria = '';
+      if (t) { titulo = ms.textoPuro(t[1]); h = h.slice(t[0].length); const c = h.match(/^\s*<h6>([\s\S]*?)<\/h6>/i); if (c) { categoria = ms.textoPuro(c[1]); h = h.slice(c[0].length); } }
+      return { de: n.de, ate: n.ate, cap: n.cap, capAte: n.capAte, artigo: !!t, titulo, categoria, html: ms.htmlVerbete(h, r.cod) };
+    }) };
 }
 const refTexto = (cap, de, ate) => `${cap}${de ? `.${de}${ate > de ? `-${ate}` : ''}` : ''}`;
 // Todos os comentários instalados sobre um versículo (verso 0 = capítulo inteiro)
@@ -149,9 +165,11 @@ function importar(arquivoTemp, nomeOriginal) {
   const ordem = (db.prepare('SELECT MAX(ordem) m FROM biblioteca WHERE tipo = ?').get(info.tipo).m || 0) + 1;
   const titulo = info.titulo && !/^©/.test(info.titulo) ? info.titulo : (info.descricao || base);
   const creditos = info.editora || info.autor || (/ - /.test(titulo) ? titulo.split(' - ').pop() : '') || (/©/.test(info.titulo) ? info.titulo : '') || (/©/.test(info.comentarios) ? info.comentarios.slice(0, 160) : '');
-  const id = db.prepare(`INSERT INTO biblioteca (cod, tipo, formato, arquivo, sigla, titulo, creditos, descricao, ordem, tamanho)
-    VALUES (?,?,?,?,?,?,?,?,?,?)`).run(cod, info.tipo, info.formato, `dados:${destino}`, sigla, titulo.slice(0, 120), creditos.slice(0, 200),
-    (info.descricao || '').slice(0, 400), ordem, fs.statSync(path.join(PASTA_DADOS, destino)).size).lastInsertRowid;
+  const estudo = info.tipo === 'comentario' && (info.estudo || /estudo/i.test(nomeOriginal || '')) ? 1 : 0;
+  const id = db.prepare(`INSERT INTO biblioteca (cod, tipo, formato, arquivo, sigla, titulo, creditos, descricao, ordem, tamanho, estudo)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?)`).run(cod, info.tipo, info.formato, `dados:${destino}`, sigla, titulo.slice(0, 120), creditos.slice(0, 200),
+    (info.descricao || '').slice(0, 400), ordem, fs.statSync(path.join(PASTA_DADOS, destino)).size, estudo).lastInsertRowid;
+  info.estudo = !!estudo;
   return { id, cod, ...info };
 }
 // Exclui o módulo do banco de dados; o arquivo importado também é apagado do servidor
@@ -182,4 +200,4 @@ function bibliaComStrong() {
 aoRemover.push(() => { comStrong = undefined; });
 function brutoComStrong(l, c, v) { const r = bibliaComStrong(); if (!r) return { texto: '', sigla: '' }; try { return { texto: ms.versoBruto(caminho(r), r.formato, l, c, v), sigla: r.sigla }; } catch { return { texto: '', sigla: '' }; } }
 
-module.exports = { brutoComStrong, comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };
+module.exports = { notasEstudo, brutoComStrong, comentario, comentariosDoVerso, introducaoLivro, versosComentados, restaurarEmbutidos, aoRemover, listar, padrao, porCod, capitulo, trecho, buscar, verbetes, verbete, imagem, importar, remover, dicionario, caminho, PASTA_DADOS };

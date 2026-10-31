@@ -47,7 +47,7 @@ function identificar(arquivo) {
     if (det) {
       const r = d.prepare(`SELECT * FROM "${det}" LIMIT 1`).get() || {};
       const v = k => { const c = Object.keys(r).find(x => x.toLowerCase() === k); return c ? r[c] : null; };
-      Object.assign(info, { titulo: v('title'), sigla: v('abbreviation'), descricao: v('description'), comentarios: v('comments'), editora: v('publisher'), idioma: v('language'), autor: v('author') });
+      Object.assign(info, { titulo: v('title'), sigla: v('abbreviation'), descricao: v('description'), comentarios: v('comments'), editora: v('publisher'), idioma: v('language'), autor: v('author'), estudo: /estudo|study/i.test(String(v('category') || v('type') || '')) || String(v('estudo') || '') === '1' });
     } else if (temTabela(ts, 'info')) {
       const o = {}; for (const r of d.prepare('SELECT name, value FROM info').all()) o[String(r.name).toLowerCase()] = r.value;
       Object.assign(info, { titulo: o.description, sigla: null, descricao: o.detailed_info, editora: o.origin, idioma: o.language });
@@ -68,7 +68,7 @@ function identificar(arquivo) {
     else quantos = d.prepare(formato === 'mysword' ? 'SELECT COUNT(*) n FROM commentary' : 'SELECT COUNT(*) n FROM commentaries').get().n;
     const limpar = s => s ? textoPuro(s).slice(0, 400) : '';
     return { tipo, formato, quantos, titulo: limpar(info.titulo), sigla: limpar(info.sigla).slice(0, 20), descricao: limpar(info.descricao),
-      comentarios: limpar(info.comentarios), editora: limpar(info.editora), autor: limpar(info.autor) };
+      comentarios: limpar(info.comentarios), editora: limpar(info.editora), autor: limpar(info.autor), estudo: !!info.estudo };
   } finally { d.close(); }
 }
 
@@ -264,6 +264,17 @@ function introducao(arquivo, formato, livro0) {
   const d = abrir(arquivo);
   return d.prepare('SELECT data AS t FROM commentary WHERE book = ? AND chapter = 0 ORDER BY id').all(livro0 + 1).map(l => l.t);
 }
+// Bíblia de estudo: todas as notas que começam no capítulo, na ordem do texto
+function notasDoCapitulo(arquivo, formato, livro0, cap) {
+  const d = abrir(arquivo);
+  if (formato === 'mybible') {
+    return d.prepare(`SELECT chapter_number_from AS c, verse_number_from AS de, chapter_number_to AS c2, verse_number_to AS ate, text AS t FROM commentaries
+      WHERE book_number = ? AND chapter_number_from = ? ORDER BY verse_number_from, rowid`).all(MYBIBLE_LIVROS[livro0], cap)
+      .map(l => ({ cap: l.c, capAte: l.c2 || l.c, de: l.de || 0, ate: Math.max(l.ate || 0, l.de || 0), html: l.t }));
+  }
+  return d.prepare('SELECT chapter AS c, fromverse AS de, toverse AS ate, data AS t FROM commentary WHERE book = ? AND chapter = ? ORDER BY fromverse, id').all(livro0 + 1, cap)
+    .map(l => ({ cap: l.c, capAte: l.c, de: l.de || 0, ate: Math.max(l.ate || 0, l.de || 0), html: l.t }));
+}
 // Versículos de um capítulo que têm comentário (para marcar no leitor)
 function versosComentados(arquivo, formato, livro0, cap) {
   const d = abrir(arquivo); const set = new Set();
@@ -324,4 +335,4 @@ function htmlVerbete(bruto, cod) {
   return html;
 }
 
-module.exports = { versoBruto, identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };
+module.exports = { notasDoCapitulo, versoBruto, identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };

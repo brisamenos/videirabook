@@ -82,6 +82,15 @@ Em **Sermões com IA**, o professor salva a chave da OpenAI, escolhe o modelo, d
 - Para quem tem a IA liberada, o **Contexto**, a **Concordância** e o **Estudo das palavras originais** de cada versículo também são gerados pela IA. Cada resultado fica guardado e é reaproveitado por todos, sem novo custo; o professor pode pedir para gerar de novo.
 - Há também modo púlpito (tela cheia, letra grande), cópia, impressão e edição manual.
 
+## Bíblia de estudo e grifos
+
+Uma Bíblia de estudo é um módulo de comentário do MySword (`.cmt.mybible`) marcado como **Bíblia de estudo**. Ela não aparece na lista comum de comentários: as notas ficam no rodapé de cada capítulo, para quem o professor liberar.
+
+- Importe o arquivo em **Módulos bíblicos**. Se o nome do arquivo tiver `estudo` (por exemplo `BEA-NVI.estudo.cmt.mybible`) ou os detalhes do módulo disserem “Bíblia de Estudo”, ele já entra marcado. Senão, marque em **Bíblia de estudo**.
+- Em **Bíblia de estudo**, o professor marca quais alunos podem usar. O professor sempre tem acesso.
+- No leitor, quem está liberado vê, no fim do capítulo, a introdução do livro (no capítulo 1), os artigos e as notas versículo por versículo. Um pequeno ícone no versículo leva à nota, e a referência da nota volta ao versículo. As referências bíblicas dentro das notas abrem o versículo ao toque.
+- **Grifar:** selecione um trecho do texto e escolha a cor (amarelo, verde, azul, rosa ou laranja). Toque num grifo para trocar a cor ou tirar. Cada pessoa vê só os próprios grifos, guardados por versão da Bíblia.
+
 ## Regras de liberação
 
 - A aula abre sozinha X dias antes do encontro (padrão: 7) para o pré-estudo.

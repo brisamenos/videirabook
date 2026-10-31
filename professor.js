@@ -10,6 +10,7 @@
       ['inscricoes', '#/p/inscricoes', 'Inscrições', icone.pessoa],
       ['modulos', '#/p/modulos', 'Módulos bíblicos', icone.livro],
       ['ia', '#/p/ia', 'Sermões com IA', icone.caneta],
+      ['estudo', '#/p/estudo', 'Bíblia de estudo', icone.marcador],
       ['avisos', '#/p/avisos', 'Avisos', icone.sino],
       ['config', '#/p/config', 'Configurações', icone.engrenagem],
     ];
@@ -188,7 +189,7 @@
         ${itens.length ? `<div class="tabela-wrap" style="border:0"><table class="tabela"><thead><tr><th style="width:84px">Ordem</th><th>Módulo</th>${tipo === 'biblia' ? '<th>Padrão</th>' : ''}<th>Ativo</th><th></th></tr></thead><tbody>
         ${itens.map((m, i) => `<tr${m.ativo ? '' : ' style="opacity:.55"'}>
           <td><div class="acoes" style="justify-content:flex-start"><button class="icone-btn" data-mover="${m.cod}" data-dir="-1" ${i ? '' : 'disabled'} aria-label="Subir">${icone.cima}</button><button class="icone-btn" data-mover="${m.cod}" data-dir="1" ${i < itens.length - 1 ? '' : 'disabled'} aria-label="Descer">${icone.baixo}</button></div></td>
-          <td><strong>${esc(m.sigla)}</strong> — ${esc(m.titulo)}<br><small class="muted">${esc(m.creditos || 'sem créditos')} · ${m.formato === 'json' ? 'texto do app' : m.formato === 'mybible' ? 'MyBible' : 'MySword'} · ${tamanho(m.tamanho)}${m.embutido ? ' · vem com o app' : ''}${m.existe ? '' : ' · <span style="color:var(--perigo)">arquivo não encontrado</span>'}</small></td>
+          <td><strong>${esc(m.sigla)}</strong> — ${esc(m.titulo)}<br><small class="muted">${esc(m.creditos || 'sem créditos')} · ${m.formato === 'json' ? 'texto do app' : m.formato === 'mybible' ? 'MyBible' : 'MySword'} · ${tamanho(m.tamanho)}${m.embutido ? ' · vem com o app' : ''}${m.estudo ? ' · <a href="#/p/estudo"><span class="etiqueta ok">Bíblia de estudo</span></a>' : ''}${m.existe ? '' : ' · <span style="color:var(--perigo)">arquivo não encontrado</span>'}</small></td>
           ${tipo === 'biblia' ? `<td><input type="radio" name="padrao" value="${m.cod}" ${m.cod === padrao ? 'checked' : ''} ${m.ativo ? '' : 'disabled'} aria-label="Versão padrão"></td>` : ''}
           <td><label class="chave"><input type="checkbox" data-ativo="${m.cod}" ${m.ativo ? 'checked' : ''} aria-label="Ativo"></label></td>
           <td><div class="acoes"><button class="icone-btn" data-editar="${m.cod}" title="Editar nome e créditos" aria-label="Editar">${icone.lapis}</button>
@@ -200,7 +201,7 @@
       <div id="envio" hidden class="painel" style="margin-bottom:16px"><p style="margin:0 0 .5rem" id="envio-txt">Enviando…</p>${VB.barra(0)}</div>
       ${bloco('biblia', 'Bíblias', 'Nenhuma Bíblia instalada.')}
       ${bloco('dicionario', 'Dicionários', 'Nenhum dicionário ainda. Importe um arquivo .dct.mybible do MySword (por exemplo, o Dicionário Wycliffe).')}
-      ${bloco('comentario', 'Comentários', 'Nenhum comentário ainda. Importe arquivos .cmt.mybible do MySword. Eles aparecem no botão de cada versículo e entram na pesquisa dos sermões.')}
+      ${bloco('comentario', 'Comentários', 'Nenhum comentário ainda. Importe arquivos .cmt.mybible do MySword. Eles aparecem no botão de cada versículo e entram na pesquisa dos sermões. Os marcados como Bíblia de estudo aparecem no rodapé do capítulo, só para quem você liberar.')}
       <section class="painel" style="margin-bottom:16px"><h3 style="margin:0 0 .4rem">Hebraico e grego</h3>
         ${original ? '<p style="margin:0" class="pequeno"><span class="etiqueta ok">Instalado</span> O texto original aparece na opção Hebraico/Grego de cada versículo.</p>'
           : '<p style="margin:0" class="pequeno"><span class="etiqueta nova">Não instalado</span> Envie o arquivo <b>original.db</b> (ou <b>original.db.gz</b>) pelo botão Importar módulo.</p>'}</section>
@@ -223,7 +224,7 @@
         if (x.status === 401) return aviso('Sua sessão expirou. Entre de novo e repita a importação.');
         if (x.status >= 500 && !d.erro) return aviso(`O servidor não conseguiu terminar a importação (erro ${x.status}). Tente de novo; se continuar, veja os logs do app no EasyPanel.`);
         if (x.status >= 400 || !d.ok) return aviso(esc(d.erro || `Não foi possível importar o módulo (erro ${x.status}).`));
-        VB.toast(d.tipo === 'original' ? 'Texto hebraico e grego instalado' : `${d.tipo === 'biblia' ? 'Bíblia importada' : d.tipo === 'comentario' ? 'Comentário importado' : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
+        VB.toast(d.tipo === 'original' ? 'Texto hebraico e grego instalado' : `${d.tipo === 'biblia' ? 'Bíblia importada' : d.tipo === 'comentario' ? (d.estudo ? 'Bíblia de estudo importada' : 'Comentário importado') : 'Dicionário importado'}: ${d.sigla || d.titulo}`);
         await VB.carregarBiblioteca(); VB.rota();
       };
       x.onerror = () => aviso('A conexão caiu durante o envio. Confira a internet e tente de novo.');
@@ -257,6 +258,31 @@
       if (!(await VB.confirmar('Excluir módulo', `Excluir <strong>${esc(m.sigla)} — ${esc(m.titulo)}</strong>? Ele sai do banco de dados e some para todos.${m.embutido ? ' Como vem com o app, dá para restaurar depois nesta tela.' : ' O arquivo também é apagado do servidor.'}`))) return;
       try { await VB.api(`/api/admin/biblioteca/${m.cod}`, { method: 'DELETE' }); VB.toast('Módulo excluído'); recarregar(); } catch (er) { VB.erro(er); }
     }));
+  });
+
+  // ── Bíblia de estudo: quais comentários são Bíblia de estudo e quem pode usar (notas no rodapé e grifos)
+  VB.registrar(/^\/p\/estudo$/, 'professor', async () => {
+    carregando('estudo'); document.title = 'Bíblia de estudo · VideiraBook';
+    const d = await VB.api('/api/admin/estudo');
+    $('#conteudo').innerHTML = `${cabecalho('Bíblia de estudo', 'Notas de estudo no rodapé de cada capítulo e grifos coloridos no texto. Só quem você liberar vê esta função.', `<a class="btn sec" href="#/biblia">${icone.livro}Abrir a Bíblia</a>`)}
+      <div class="ia-grade">
+      <section class="painel"><h3 style="margin-top:0">Módulos de estudo</h3>
+        <p class="muted pequeno" style="margin-top:0">Marque os comentários que devem aparecer como Bíblia de estudo. Eles saem da lista comum de comentários e ficam só para quem estiver liberado.</p>
+        ${d.modulos.length ? `<div class="lista-ia">${d.modulos.map(m => `<label class="chave linha-ia"><input type="checkbox" data-estudo-mod="${esc(m.cod)}" ${m.estudo ? 'checked' : ''}><span><strong>${esc(m.titulo)}</strong> <small class="muted">${esc(m.sigla)}${m.ativo ? '' : ' · desativado'}</small></span></label>`).join('')}</div>`
+          : `<div class="vazio" style="border:0"><strong>Nenhum comentário instalado</strong>Importe o módulo da Bíblia de estudo (.cmt.mybible) em <a href="#/p/modulos">Módulos bíblicos</a>.</div>`}
+      </section>
+      <section class="painel"><h3 style="margin-top:0">Quem pode usar</h3>
+        <p class="muted pequeno" style="margin-top:0">Marque os alunos que poderão ver as notas e grifar o texto. Você, professor, sempre tem acesso.</p>
+        <input class="input" id="busca-est" placeholder="Buscar aluno" style="margin-bottom:.6rem" aria-label="Buscar aluno">
+        <div class="lista-ia">${d.usuarios.length ? d.usuarios.map(u => `<label class="chave linha-est" data-nome="${esc(VB.normalizar(u.nome + ' ' + u.usuario))}"><input type="checkbox" data-estudo-u="${u.id}" ${u.pode_estudo ? 'checked' : ''}><span><strong>${esc(u.nome)}</strong> <small class="muted">${esc(u.usuario)}${u.ativo ? '' : ' · desativado'}</small></span></label>`).join('') : '<p class="muted">Nenhum aluno cadastrado.</p>'}</div>
+      </section></div>`;
+    $$('[data-estudo-mod]').forEach(c => c.addEventListener('change', async () => {
+      try { await VB.api(`/api/admin/estudo/modulos/${encodeURIComponent(c.dataset.estudoMod)}`, { method: 'PUT', body: { estudo: c.checked } }); VB.toast(c.checked ? 'Marcado como Bíblia de estudo' : 'Voltou para a lista de comentários'); await VB.carregarBiblioteca(); } catch (er) { VB.erro(er); c.checked = !c.checked; }
+    }));
+    $$('[data-estudo-u]').forEach(c => c.addEventListener('change', async () => {
+      try { await VB.api(`/api/admin/estudo/usuarios/${c.dataset.estudoU}`, { method: 'PUT', body: { pode_estudo: c.checked } }); VB.toast(c.checked ? 'Acesso liberado' : 'Acesso retirado'); } catch (er) { VB.erro(er); c.checked = !c.checked; }
+    }));
+    $('#busca-est').addEventListener('input', e => { const q = VB.normalizar(e.target.value); $$('.linha-est').forEach(l => { l.hidden = !!q && !l.dataset.nome.includes(q); }); });
   });
 
   // ── Sermões com IA: chave da OpenAI, modelo, quem pode usar e frases de homens de Deus

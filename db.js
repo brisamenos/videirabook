@@ -184,6 +184,18 @@ CREATE TABLE IF NOT EXISTS inscricoes (
 
 // Colunas novas em bancos antigos
 if (!db.prepare('PRAGMA table_info(usuarios)').all().some(c => c.name === 'pode_ia')) db.exec('ALTER TABLE usuarios ADD COLUMN pode_ia INTEGER NOT NULL DEFAULT 0');
+// Bíblia de estudo: módulos marcados como "estudo" e alunos liberados pelo professor
+if (!db.prepare('PRAGMA table_info(usuarios)').all().some(c => c.name === 'pode_estudo')) db.exec('ALTER TABLE usuarios ADD COLUMN pode_estudo INTEGER NOT NULL DEFAULT 0');
+if (!db.prepare('PRAGMA table_info(biblioteca)').all().some(c => c.name === 'estudo')) db.exec('ALTER TABLE biblioteca ADD COLUMN estudo INTEGER NOT NULL DEFAULT 0');
+// Grifos: trechos marcados por cada pessoa (posição em caracteres dentro do texto do versículo)
+db.exec(`CREATE TABLE IF NOT EXISTS grifos (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  versao TEXT NOT NULL, livro INTEGER NOT NULL, cap INTEGER NOT NULL, verso INTEGER NOT NULL,
+  ini INTEGER NOT NULL, fim INTEGER NOT NULL, cor TEXT NOT NULL DEFAULT 'amarelo',
+  criado_em TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS grifos_cap ON grifos (usuario_id, versao, livro, cap);`);
 
 // Frases iniciais de homens de Deus (o professor pode editar, desativar e acrescentar)
 if (!db.prepare('SELECT COUNT(*) n FROM frases').get().n) {
