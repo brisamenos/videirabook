@@ -817,6 +817,8 @@ app.get('/api/dicionario/:cod/verbete', auth, h((req, res) => {
   res.json(v);
 }));
 app.get('/api/modulos/:cod/imagem/:id', auth, h((req, res) => {
+  const mod = BIB.porCod(req.params.cod);
+  if (mod && mod.estudo && !require('./estudo').podeEstudo(req.user)) return res.status(403).end();   // imagens das Bíblias de estudo: só para quem foi liberado
   const im = BIB.imagem(req.params.cod, req.params.id);
   if (!im || !im.content) return res.status(404).end();
   const b = Buffer.from(im.content);

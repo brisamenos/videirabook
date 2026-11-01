@@ -909,6 +909,16 @@ html[data-tema="noite"] .biblia-texto .estudo-bloco { background: #1C211D; borde
 html[data-tema="noite"] .estudo-bloco > summary strong { color: #E3E6DF; }
 html[data-tema="noite"] .versoes .versao.versao-estudo[aria-checked="true"] { background: #2E2A1C; }
 
+/* imagens das Bíblias de estudo (fotos arqueológicas, mapas) */
+.nota-estudo .ne-img { margin: 0; }
+.nota-estudo .ne-img img, .estudo-texto img { display: block; max-width: 100%; height: auto; max-height: 320px; border-radius: var(--r-sm); cursor: zoom-in; background: #fff; }
+.nota-estudo .ne-img figcaption { margin-top: .4rem; font-size: .8rem; color: var(--suave); }
+.nota-estudo .ne-img figcaption p { margin: 0; }
+.img-ampliada { margin: 0; }
+.img-ampliada img { display: block; max-width: 100%; max-height: 75vh; margin: 0 auto; border-radius: var(--r-sm); }
+.img-ampliada figcaption { margin-top: .7rem; color: var(--suave); }
+html[data-tema="noite"] .nota-estudo .ne-img figcaption { color: #B9BDB4; }
+
 /* ───────── Grifos */
 .biblia-texto.grifavel p[id^="v"] { -webkit-user-select: text; user-select: text; }
 mark.grifo { color: inherit; border-radius: 3px; padding: .05em 0; box-decoration-break: clone; -webkit-box-decoration-break: clone; cursor: pointer; }

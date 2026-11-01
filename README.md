@@ -88,6 +88,7 @@ Uma Bíblia de estudo é lida como uma Bíblia: ela aparece junto com as versõe
 
 - O arquivo é um módulo do MySword (`.cmt.mybible`) com `estudo` no nome (ex.: `BEA-NVI.estudo.cmt.mybible`) ou com “Bíblia de Estudo” nos detalhes. Importe em **Módulos bíblicos**; ele aparece no bloco **Bíblias de estudo**, separado dos comentários.
 - Em **Bíblia de estudo**, o professor escolhe qual Bíblia instalada dá o texto de cada uma (ex.: a Arqueológica usa a NVI) e marca quais alunos podem usar. O professor sempre tem acesso; quem não está liberado não vê as Bíblias de estudo.
+- **Imagens:** fotos arqueológicas, mapas e ilustrações que vêm no módulo aparecem embaixo do versículo, com a legenda; tocando na imagem ela abre grande.
 - **Grifar:** selecione um trecho do texto e escolha a cor (amarelo, verde, azul, rosa ou laranja). Toque num grifo para trocar a cor ou tirar. Cada pessoa vê só os próprios grifos, guardados por versão.
 
 ## Regras de liberação

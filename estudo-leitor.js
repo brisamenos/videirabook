@@ -160,7 +160,12 @@
       if (ancora.nextElementSibling && ancora.nextElementSibling.classList.contains('comparado')) ancora = ancora.nextElementSibling;
       const notas = lista.filter(n => !n.artigo), artigos = lista.filter(n => n.artigo);
       let html = '';
-      if (notas.length) html += `<aside class="nota-estudo" aria-label="Nota de estudo">${notas.map(n => `<div class="ne"><span class="ne-ref">${esc(refDe(n))}</span><div class="estudo-texto">${semRef(n.html)}</div></div>`).join('')}</aside>`;
+      // notas primeiro, imagens (com legenda) depois
+      const ehImagem = n => /^\s*<img/i.test(n.html);
+      const ordenadas = [...notas.filter(n => !ehImagem(n)), ...notas.filter(ehImagem)];
+      if (ordenadas.length) html += `<aside class="nota-estudo" aria-label="Nota de estudo">${ordenadas.map(n => ehImagem(n)
+        ? `<figure class="ne ne-img">${n.html.replace(/^\s*(<img[^>]*>)/i, '$1<figcaption class="estudo-texto">').replace(/$/, '</figcaption>')}</figure>`
+        : `<div class="ne"><span class="ne-ref">${esc(refDe(n))}</span><div class="estudo-texto">${semRef(n.html)}</div></div>`).join('')}</aside>`;
       html += artigos.map(a => `<details class="estudo-bloco estudo-artigo"><summary><span class="estudo-tipo">${esc(a.categoria || 'Artigo')}</span><strong>${esc(a.titulo || 'Artigo')}</strong></summary>
         <div class="estudo-texto">${a.html}</div></details>`).join('');
       ancora.insertAdjacentHTML('afterend', html);
@@ -174,6 +179,12 @@
   }
   document.addEventListener('click', e => {
     if (barra && !e.target.closest('.grifador, mark.grifo')) fecharBarra();
+    // imagem da Bíblia de estudo: abre grande
+    const img = e.target.closest('.nota-estudo img, .estudo-bloco img');
+    if (img) {
+      const leg = img.closest('figure')?.querySelector('figcaption')?.innerHTML || '';
+      VB.modal({ titulo: 'Imagem', largo: true, corpo: `<figure class="img-ampliada"><img src="${img.getAttribute('src')}" alt="">${leg ? `<figcaption class="estudo-texto">${leg}</figcaption>` : ''}</figure>` });
+    }
   });
   addEventListener('hashchange', fecharBarra);
   addEventListener('resize', fecharBarra);
