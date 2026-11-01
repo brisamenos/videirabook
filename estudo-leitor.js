@@ -90,6 +90,7 @@
     barra = document.createElement('div');
     barra.className = 'grifador'; barra.setAttribute('role', 'toolbar'); barra.setAttribute('aria-label', 'Grifar o texto');
     barra.innerHTML = CORES.map(([c, n]) => `<button type="button" class="g-${c}${opcoes.cor === c ? ' atual' : ''}" data-cor="${c}" aria-label="Grifar de ${n.toLowerCase()}" title="${n}"></button>`).join('')
+      + (opcoes.palavra ? `<button type="button" class="grifo-sig" data-sig aria-label="Significado de ${VB.esc(opcoes.palavra)}" title="Significado nos dicionários"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5zM4 20.5A2.5 2.5 0 0 0 6.5 21H20v-3"/></svg></button>` : '')
       + (opcoes.remover ? '<button type="button" class="grifo-tirar" data-tirar aria-label="Tirar o grifo" title="Tirar o grifo"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>' : '');
     document.body.appendChild(barra);
     const w = barra.offsetWidth, h = barra.offsetHeight;
@@ -103,6 +104,7 @@
       const b = e.target.closest('button'); if (!b || !estado) return;
       const st = estado; fecharBarra();
       if (b.dataset.cor) st.aoCor(b.dataset.cor); else if (b.hasAttribute('data-tirar')) st.aoTirar();
+      else if (b.hasAttribute('data-sig') && VB.significado) { const s = getSelection(); if (s) s.removeAllRanges(); VB.significado(st.palavra); }
     });
   }
 
@@ -142,12 +144,12 @@
         if (!sel || sel.isCollapsed || !sel.rangeCount) { if (estado && estado.tipo === 'selecao') fecharBarra(); return; }
         const r = sel.getRangeAt(0);
         if (!texto.contains(r.commonAncestorContainer)) return;
-        if (Date.now() - (VB._dicEm || 0) < 1500) return;   // acabou de abrir o dicionário (tocar e segurar)
+        const um = String(sel).trim(); const palavra = /^[\p{L}'’-]{2,40}$/u.test(um) ? um : null;   // uma palavra só: botão Significado
         const tn = vNota ? selecaoNaNota(r) : null;
         if (tn) {
           const tocadosN = grifosN.filter(g => g.verso === tn.verso && g.ini < tn.fim && g.fim > tn.ini).map(g => g.id);
           abrirBarra(r.getBoundingClientRect(), {
-            tipo: 'selecao', remover: tocadosN.length > 0,
+            tipo: 'selecao', remover: tocadosN.length > 0, palavra,
             aoCor: cor => { sel.removeAllRanges(); salvar([tn], cor, true); },
             aoTirar: () => { sel.removeAllRanges(); tirar(tocadosN, true); },
           });
@@ -157,7 +159,7 @@
         if (!trechos.length) return;
         const tocados = grifos.filter(g => trechos.some(t => t.verso === g.verso && g.ini < t.fim && g.fim > t.ini)).map(g => g.id);
         abrirBarra(r.getBoundingClientRect(), {
-          tipo: 'selecao', remover: tocados.length > 0,
+          tipo: 'selecao', remover: tocados.length > 0, palavra,
           aoCor: cor => { sel.removeAllRanges(); salvar(trechos, cor); },
           aoTirar: () => { sel.removeAllRanges(); tirar(tocados); },
         });
@@ -518,25 +520,10 @@
   };
 })();
 
-/* ── Tocar e segurar numa palavra: significado nos dicionários instalados */
+/* ── Significado de uma palavra nos dicionários instalados (botão na barra de grifar, com uma palavra selecionada) */
 (function () {
   const { esc } = VB;
-  const LETRA = /[\p{L}'’-]/u;
-  function palavraNoPonto(x, y) {
-    let no, off;
-    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (!p) return null; no = p.offsetNode; off = p.offset; }
-    else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (!r) return null; no = r.startContainer; off = r.startOffset; }
-    if (!no || no.nodeType !== 3) return null;
-    const t = no.nodeValue; let a = off, b = off;
-    while (a > 0 && LETRA.test(t[a - 1])) a--;
-    while (b < t.length && LETRA.test(t[b])) b++;
-    const w = t.slice(a, b).replace(/^['’-]+|['’-]+$/g, '');
-    if (w.length < 2) return null;
-    const r = document.createRange(); r.setStart(no, a); r.setEnd(no, b);
-    return { palavra: w, range: r };
-  }
   async function mostrar(palavra, range) {
-    VB._dicEm = Date.now();
     const m = VB.modal({ titulo: `Significado: ${esc(palavra)}`, largo: true, corpo: '<div class="carregando"></div>' });
     m.el.classList.add('folha-fundo'); m.el.querySelector('.modal').classList.add('folha');
     const corpo = m.el.querySelector('.modal-corpo');
@@ -553,32 +540,11 @@
       corpo.querySelectorAll('[data-dic]').forEach(d => VB.prepararVerbete && VB.prepararVerbete(d));
     }
     corpo.querySelector('[data-sel]')?.addEventListener('click', () => {
-      m.fechar(); VB._dicEm = 0;
+      m.fechar();
       const s = getSelection(); s.removeAllRanges(); s.addRange(range);
     });
     corpo.querySelectorAll('a[href^="#/concordancia"]').forEach(a => a.addEventListener('click', () => m.fechar()));
   }
 
-  let timer = null, ini = null, disparou = false;
-  const AREA = '.leitor-corpo .biblia-texto, .leitor-corpo .estudo-texto, .modal .estudo-texto';
-  document.addEventListener('pointerdown', e => {
-    if (e.button > 0) return;
-    const alvo = e.target.closest(AREA); if (!alvo || e.target.closest('button, a, input, select, summary, img')) return;
-    ini = { x: e.clientX, y: e.clientY }; disparou = false;
-    clearTimeout(timer);
-    timer = setTimeout(() => {
-      const w = palavraNoPonto(ini.x, ini.y); if (!w) return;
-      disparou = true;
-      setTimeout(() => { const s = getSelection(); if (s) s.removeAllRanges(); }, 30);
-      mostrar(w.palavra, w.range);
-    }, 550);
-  }, { passive: true });
-  const cancela = e => { if (!timer) return; if (e && e.type === 'pointermove' && ini && Math.hypot(e.clientX - ini.x, e.clientY - ini.y) < 10) return; clearTimeout(timer); timer = null; };
-  document.addEventListener('pointermove', cancela, { passive: true });
-  document.addEventListener('pointerup', () => { clearTimeout(timer); timer = null; });
-  document.addEventListener('pointercancel', () => { clearTimeout(timer); timer = null; });
-  addEventListener('scroll', () => { clearTimeout(timer); timer = null; }, { passive: true });
-  // depois de abrir o dicionário, o toque não vira "selecionar versículo" nem abre o menu do sistema
-  document.addEventListener('click', e => { if (disparou && e.target.closest(AREA)) { e.stopPropagation(); e.preventDefault(); disparou = false; } }, true);
-  document.addEventListener('contextmenu', e => { if (e.target.closest(AREA) && (disparou || timer)) e.preventDefault(); });
+  VB.significado = palavra => mostrar(palavra, null);
 })();

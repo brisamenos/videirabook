@@ -935,6 +935,8 @@ html[data-tema="noite"] mark.grifo { background: color-mix(in srgb, var(--g) 34%
 .grifador button.atual { border-color: var(--tinta); }
 .grifador button:focus-visible { outline: 2px solid var(--vinho-2); outline-offset: 2px; }
 .grifador .grifo-tirar { background: transparent; border: 1px solid var(--linha); display: grid; place-items: center; }
+.grifador .grifo-sig { background: transparent; border: 1px solid var(--linha); display: grid; place-items: center; }
+.grifador .grifo-sig svg { width: 16px; height: 16px; stroke: var(--texto, currentColor); stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 .grifador .grifo-tirar svg { width: 14px; height: 14px; stroke: var(--suave); stroke-width: 2.2; fill: none; stroke-linecap: round; }
 html[data-tema="noite"] .grifador { background: #222823; border-color: #3A423B; }
 html[data-tema="noite"] .grifador button.atual { border-color: #F2EFE6; }
