@@ -750,7 +750,7 @@ const BIB = require('./biblioteca');
 const publicoMod = r => ({ cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '' });
 app.get('/api/biblioteca', auth, h((req, res) => {
   const estudos = require('./estudo').podeEstudo(req.user) ? BIB.listar('comentario', { estudo: true }).map(r => {
-    const b = BIB.baseDoEstudo(r) || {}; return { ...publicoMod(r), base: b.cod || '', baseSigla: b.sigla || '' };
+    const b = BIB.baseDoEstudo(r) || {}; return { ...publicoMod(r), base: b.cod || '', baseSigla: b.sigla || '', capa: require('./estudo').temCapa(r) };
   }) : [];
   res.json({ padrao: BIB.padrao(), biblias: BIB.listar('biblia').map(publicoMod), dicionarios: BIB.listar('dicionario').map(publicoMod), comentarios: BIB.listar('comentario').map(publicoMod), estudos });
 }));
@@ -864,7 +864,7 @@ P.delete('/biblioteca/:cod', h((req, res) => {
 const SERMOES = require('./sermoes');
 SERMOES(app, P, auth, h);
 // ── Bíblia de estudo e grifos
-require('./estudo')(app, P, auth, h);
+require('./estudo')(app, P, auth, h, upload);
 
 // O site Bíblia Online deixa ser aberto dentro de outra página? (verificado 1x por dia)
 let embutir = { permitido: null, em: 0 };

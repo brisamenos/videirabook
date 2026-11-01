@@ -197,7 +197,13 @@ db.exec(`CREATE TABLE IF NOT EXISTS grifos (
   ini INTEGER NOT NULL, fim INTEGER NOT NULL, cor TEXT NOT NULL DEFAULT 'amarelo',
   criado_em TEXT DEFAULT (datetime('now','localtime'))
 );
-CREATE INDEX IF NOT EXISTS grifos_cap ON grifos (usuario_id, versao, livro, cap);`);
+CREATE INDEX IF NOT EXISTS grifos_cap ON grifos (usuario_id, versao, livro, cap);
+CREATE TABLE IF NOT EXISTS marcadores (
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  versao TEXT NOT NULL, livro INTEGER NOT NULL, cap INTEGER NOT NULL, verso INTEGER NOT NULL DEFAULT 0,
+  atualizado_em TEXT DEFAULT (datetime('now','localtime')),
+  PRIMARY KEY (usuario_id, versao)
+);`);
 
 // Frases iniciais de homens de Deus (o professor pode editar, desativar e acrescentar)
 if (!db.prepare('SELECT COUNT(*) n FROM frases').get().n) {

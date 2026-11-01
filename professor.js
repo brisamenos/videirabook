@@ -269,7 +269,11 @@
       <div class="ia-grade">
       <section class="painel"><h3 style="margin-top:0">Bíblias de estudo</h3>
         <p class="muted pequeno" style="margin-top:0">Cada Bíblia de estudo aparece junto com as versões da Bíblia. Escolha qual texto bíblico ela usa; as notas ficam abertas embaixo de cada versículo comentado.</p>
-        ${d.modulos.filter(m => m.estudo).map(m => `<div class="linha-estudo"><div><strong>${esc(m.titulo)}</strong> <small class="muted">${esc(m.sigla)}${m.ativo ? '' : ' · desativado'}</small></div>
+        ${d.modulos.filter(m => m.estudo).map(m => `<div class="linha-estudo"><div class="linha-estudo-cab">
+            <span class="capa-prof">${m.capa ? `<img src="/api/estudo/${encodeURIComponent(m.cod)}/capa?t=${Date.now()}" alt="">` : `<span>${esc(m.sigla)}</span>`}</span>
+            <div><strong>${esc(m.titulo)}</strong> <small class="muted">${esc(m.sigla)}${m.ativo ? '' : ' · desativado'}</small>
+              <div class="acoes" style="justify-content:flex-start;margin-top:.4rem"><label class="btn sec mini">${icone.upload}${m.capa ? 'Trocar capa' : 'Enviar capa'}<input type="file" accept="image/jpeg,image/png,image/webp" data-capa="${esc(m.cod)}" hidden></label>
+              ${m.capaEnviada ? `<button type="button" class="btn sec mini" data-capa-tirar="${esc(m.cod)}">Usar a capa do arquivo</button>` : ''}</div></div></div>
           <label class="campo" style="margin:0"><span>Texto bíblico</span><select class="input" data-estudo-base="${esc(m.cod)}">${d.biblias.map(b => `<option value="${esc(b.cod)}"${b.cod === m.base ? ' selected' : ''}>${esc(b.sigla)} — ${esc(b.titulo)}</option>`).join('')}</select></label></div>`).join('')
           || `<div class="vazio" style="border:0"><strong>Nenhuma Bíblia de estudo instalada</strong>Importe o arquivo .estudo.cmt.mybible em <a href="#/p/modulos">Módulos bíblicos</a>.</div>`}
         ${d.modulos.some(m => !m.estudo) ? `<details style="margin-top:1rem"><summary class="pequeno muted" style="cursor:pointer">Transformar um comentário em Bíblia de estudo</summary>
@@ -284,6 +288,14 @@
     const mudar = async (cod, corpo, msg) => { try { await VB.api(`/api/admin/estudo/modulos/${encodeURIComponent(cod)}`, { method: 'PUT', body: corpo }); VB.toast(msg); await VB.carregarBiblioteca(); VB.rota(); } catch (er) { VB.erro(er); } };
     $$('[data-estudo-mod]').forEach(c => c.addEventListener('change', () => mudar(c.dataset.estudoMod, { estudo: true }, 'Agora é uma Bíblia de estudo')));
     $$('[data-estudo-tirar]').forEach(b => b.addEventListener('click', () => mudar(b.dataset.estudoTirar, { estudo: false }, 'Voltou para a lista de comentários')));
+    $$('[data-capa]').forEach(inp => inp.addEventListener('change', async () => {
+      const f = inp.files[0]; if (!f) return;
+      const fd = new FormData(); fd.append('capa', f, f.name);
+      try { await VB.api(`/api/admin/estudo/modulos/${encodeURIComponent(inp.dataset.capa)}/capa`, { method: 'POST', body: fd }); VB.toast('Capa atualizada'); await VB.carregarBiblioteca(); VB.rota(); } catch (er) { VB.erro(er); }
+    }));
+    $$('[data-capa-tirar]').forEach(b => b.addEventListener('click', async () => {
+      try { await VB.api(`/api/admin/estudo/modulos/${encodeURIComponent(b.dataset.capaTirar)}/capa`, { method: 'DELETE' }); VB.toast('Voltou para a capa do arquivo'); await VB.carregarBiblioteca(); VB.rota(); } catch (er) { VB.erro(er); }
+    }));
     $$('[data-estudo-base]').forEach(sel => sel.addEventListener('change', () => mudar(sel.dataset.estudoBase, { base: sel.value }, 'Texto bíblico alterado')));
     $$('[data-estudo-u]').forEach(c => c.addEventListener('change', async () => {
       try { await VB.api(`/api/admin/estudo/usuarios/${c.dataset.estudoU}`, { method: 'PUT', body: { pode_estudo: c.checked } }); VB.toast(c.checked ? 'Acesso liberado' : 'Acesso retirado'); } catch (er) { VB.erro(er); c.checked = !c.checked; }

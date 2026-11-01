@@ -127,7 +127,11 @@ function notasEstudo(cod, livro0, cap) {
   let notas = [], intro = [];
   try { notas = ms.notasDoCapitulo(caminho(r), r.formato, livro0, cap); } catch {}
   if (cap === 1) { try { intro = ms.introducao(caminho(r), r.formato, livro0).map(h => ms.htmlVerbete(String(h).replace(/^\s*<h3>[\s\S]*?<\/h3>/i, ''), r.cod)); } catch {} }
-  return { cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '', intro,
+  let tits = null;
+  try { tits = ms.titulosDoCapitulo(caminho(r), livro0, cap); } catch {}
+  const titulos = tits ? tits.filter(x => x.tipo === 'titulo').map(x => ({ v: x.v, t: ms.textoPuro(x.t) })) : null;
+  const epigrafe = tits ? (tits.find(x => x.tipo === 'epigrafe') || {}).t || '' : '';
+  return { cod: r.cod, sigla: r.sigla, titulo: r.titulo, creditos: r.creditos || '', intro, titulos, epigrafe,
     notas: notas.map(n => {
       // artigos (quadros) começam com <h3>título</h3> e podem ter <h6>categoria</h6>
       let h = String(n.html || ''); const t = h.match(/^\s*<h3>([\s\S]*?)<\/h3>/i); let titulo = '', categoria = '';

@@ -139,6 +139,7 @@
     });
 
     await Promise.all([carregarGrifos(), estudo ? montarNotas(corpo, texto, estudo, { livro, cap }) : null]);
+    VB.outrasNotas(texto, { livro, cap, atual: estudo ? estudo.cod : '' });
   };
 
   // ── Bíblia de estudo: a nota fica aberta logo abaixo do versículo comentado
@@ -170,6 +171,19 @@
         <div class="estudo-texto">${a.html}</div></details>`).join('');
       ancora.insertAdjacentHTML('afterend', html);
     }
+    // epígrafes da própria Bíblia de estudo (títulos de seção e sobrescrito dos Salmos) no lugar das da versão do texto
+    if ((d.titulos && d.titulos.length) || d.epigrafe) {
+      texto.querySelectorAll('.titulo-secao, .epigrafe').forEach(x => x.remove());
+      for (const t of d.titulos || []) {
+        const p = texto.querySelector(`p#v${Math.max(1, t.v)}`); if (!p) continue;
+        p.insertAdjacentHTML('beforebegin', `<h4 class="titulo-secao">${esc(t.t)}</h4>`);
+      }
+      if (d.epigrafe) {
+        const p1 = texto.querySelector('p#v1');
+        const ancora = p1 && p1.previousElementSibling && p1.previousElementSibling.classList.contains('titulo-secao') ? p1.previousElementSibling : p1;
+        if (ancora) ancora.insertAdjacentHTML('beforebegin', `<p class="epigrafe">${esc(d.epigrafe)}</p>`);
+      }
+    }
     if (d.intro && d.intro.length) {
       texto.insertAdjacentHTML('afterbegin', `<details class="estudo-bloco estudo-intro"><summary><span class="estudo-tipo">Introdução ao livro</span><strong>${esc(VB.LIVROS[livro][0])}</strong></summary>
         <div class="estudo-texto">${d.intro.join('')}</div></details>`);
@@ -189,4 +203,135 @@
   addEventListener('hashchange', fecharBarra);
   addEventListener('resize', fecharBarra);
   document.addEventListener('keydown', e => { if (e.key === 'Escape') fecharBarra(); });
+})();
+
+/* ── Prateleira das Bíblias de estudo, marcadores por versão e "nota em outra Bíblia de estudo" */
+(function () {
+  const { esc } = VB;
+  const ICONE_FITA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v18l-5-4-5 4z"/></svg>';
+
+  // ── Marcadores (um por versão)
+  VB.MARC = null;
+  VB.carregarMarcadores = async function (forcar) {
+    if (VB.MARC && !forcar) return VB.MARC;
+    try { VB.MARC = {}; (await VB.api('/api/marcadores')).forEach(m => { VB.MARC[m.versao] = m; }); } catch { VB.MARC = VB.MARC || {}; }
+    return VB.MARC;
+  };
+  const nomeVersao = c => (VB.VERSOES.find(v => v[0] === c) || [])[1] || (VB.estudoPorCod(c) || {}).sigla || c;
+  const refMarc = m => `${VB.LIVROS[m.livro][0]} ${m.cap}${m.verso > 1 ? `.${m.verso}` : ''}`;
+  // Ao escolher uma versão: se ela tem marcador em outro lugar, vai para ele. Devolve true se mudou de página.
+  VB.irParaMarcador = function (versao, atual) {
+    const m = (VB.MARC || {})[versao];
+    if (!m || !VB.LIVROS[m.livro]) return false;
+    if (atual && atual.livro === m.livro && atual.cap === m.cap) return false;
+    location.hash = VB.rotaBiblia(VB.LIVROS[m.livro], m.cap, m.verso > 1 ? m.verso : 0);
+    VB.toast(`Marcador da ${nomeVersao(versao)}: ${refMarc(m)}`);
+    return true;
+  };
+  // Botão do leitor
+  VB.botaoMarcador = function (alvo, { livro, cap }) {
+    const desenhar = () => {
+      const v = VB.versaoBiblia(); const m = (VB.MARC || {})[v];
+      const aqui = m && m.livro === livro && m.cap === cap;
+      alvo.innerHTML = `<button type="button" class="btn sec mini btn-marcador${aqui ? ' ativo' : ''}" aria-pressed="${!!aqui}" title="${aqui ? 'Tirar o marcador' : 'Marcar onde parei nesta versão'}">${ICONE_FITA}${aqui ? 'Marcado' : 'Marcar aqui'}</button>
+        ${m && !aqui ? `<a class="marcador-ir" href="${VB.rotaBiblia(VB.LIVROS[m.livro], m.cap, m.verso > 1 ? m.verso : 0)}">Seu marcador na ${esc(nomeVersao(v))}: ${esc(refMarc(m))}</a>` : ''}`;
+      alvo.querySelector('button').addEventListener('click', async () => {
+        try {
+          if (aqui) { await VB.api(`/api/marcadores/${encodeURIComponent(v)}`, { method: 'DELETE' }); delete VB.MARC[v]; VB.toast('Marcador tirado'); }
+          else {
+            // versículo que está no alto da tela
+            const ps = [...document.querySelectorAll('.biblia-texto p[id^="v"]')];
+            const p = ps.find(x => x.getBoundingClientRect().top >= 70) || ps[0];
+            const verso = p ? Number(p.id.slice(1)) : 1;
+            await VB.api(`/api/marcadores/${encodeURIComponent(v)}`, { method: 'PUT', body: { livro, cap, verso } });
+            VB.MARC[v] = { versao: v, livro, cap, verso };
+            VB.toast(`Marcador da ${nomeVersao(v)} em ${refMarc(VB.MARC[v])}`);
+          }
+        } catch (e) { VB.erro(e); }
+        desenhar();
+      });
+    };
+    VB.carregarMarcadores().then(desenhar);
+    return desenhar;
+  };
+  // Lista de marcadores (página da Bíblia)
+  VB.montarMarcadores = async function (el) {
+    if (!el) return;
+    const M = await VB.carregarMarcadores(true);
+    const lista = Object.values(M).filter(m => VB.LIVROS[m.livro] && (VB.versaoInterna(m.versao)));
+    if (!lista.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<section class="painel marcadores"><h3>${ICONE_FITA}Seus marcadores</h3><div class="marcadores-lista">${lista.map(m =>
+      `<a href="${VB.rotaBiblia(VB.LIVROS[m.livro], m.cap, m.verso > 1 ? m.verso : 0)}" data-versao="${esc(m.versao)}"><b>${esc(nomeVersao(m.versao))}</b><span>${esc(refMarc(m))}</span></a>`).join('')}</div></section>`;
+    el.querySelectorAll('a[data-versao]').forEach(a => a.addEventListener('click', () => VB.pref.set('versao', a.dataset.versao)));
+  };
+
+  // ── Prateleira
+  const capaHtml = e => e.capa
+    ? `<img src="/api/estudo/${encodeURIComponent(e.cod)}/capa" alt="" loading="lazy">`
+    : `<span class="capa-falsa"><b>${esc(e.sigla)}</b><small>${esc(e.titulo)}</small></span>`;
+  VB.capaMini = e => e.capa ? `<img class="capa-mini" src="/api/estudo/${encodeURIComponent(e.cod)}/capa" alt="" loading="lazy">` : '';
+  VB.montarPrateleira = async function (el) {
+    if (!el || !VB.ESTUDOS || !VB.ESTUDOS.length) { if (el) el.innerHTML = ''; return; }
+    await VB.carregarMarcadores();
+    const atual = VB.versaoBiblia();
+    el.innerHTML = `<section class="prateleira" aria-label="Bíblias de estudo">
+      <div class="prateleira-cab"><h2>Bíblias de estudo</h2><p>Escolha a Bíblia que você está estudando.</p></div>
+      <div class="prateleira-livros"><div class="trilho">${VB.ESTUDOS.map(e => {
+        const m = (VB.MARC || {})[e.cod];
+        return `<button type="button" class="livro-estudo${e.cod === atual ? ' atual' : ''}" data-estudo="${esc(e.cod)}" aria-label="${esc(e.titulo)}">
+          <span class="capa">${capaHtml(e)}${m ? `<span class="fita" title="Marcador">${ICONE_FITA}</span>` : ''}</span>
+          <span class="rotulo"><b>${esc(e.sigla)}</b>${m ? `<small>${esc(refMarc(m))}</small>` : '<small>Começar</small>'}</span></button>`;
+      }).join('')}</div></div></section>`;
+    el.querySelectorAll('[data-estudo]').forEach(b => b.addEventListener('click', () => {
+      const cod = b.dataset.estudo; VB.pref.set('versao', cod);
+      if (!VB.irParaMarcador(cod)) location.hash = VB.rotaBiblia(VB.LIVROS[0], 1);
+    }));
+  };
+
+  // ── Sinal de "nota em outra Bíblia de estudo" no versículo
+  VB.outrasNotas = async function (texto, { livro, cap, atual }) {
+    if (!VB.me || !VB.me.estudo || !VB.ESTUDOS || !VB.ESTUDOS.length) return;
+    let marcas;
+    try { marcas = await VB.api(`/api/estudo-marcas/${livro}/${cap}`); } catch { return; }
+    if (!document.body.contains(texto)) return;
+    const porVerso = {};
+    for (const [cod, vs] of Object.entries(marcas)) {
+      if (cod === atual || !VB.estudoPorCod(cod)) continue;
+      vs.forEach(v => { (porVerso[v] = porVerso[v] || []).push(cod); });
+    }
+    for (const [v, cods] of Object.entries(porVerso)) {
+      const p = texto.querySelector(`p#v${v}`); if (!p || p.querySelector('.outra-nota')) continue;
+      const siglas = cods.map(c => VB.estudoPorCod(c).sigla).join(', ');
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'outra-nota'; b.dataset.cods = cods.join(','); b.dataset.v = v;
+      b.title = `Nota em ${siglas}`; b.setAttribute('aria-label', `Ver nota de ${siglas} sobre o versículo ${v}`);
+      b.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5c2.7-1.3 5.3-1.3 8 0 2.7-1.3 5.3-1.3 8 0V19c-2.7-1.3-5.3-1.3-8 0-2.7-1.3-5.3-1.3-8 0z"/><path d="M12 5.5V19"/></svg><span>${cods.length}</span>`;
+      const ac = p.querySelector('.acao-verso'); ac ? ac.before(b) : p.appendChild(b);
+    }
+    texto.addEventListener('click', async e => {
+      const b = e.target.closest('.outra-nota'); if (!b) return;
+      e.preventDefault(); e.stopPropagation();
+      const v = Number(b.dataset.v); const cods = b.dataset.cods.split(',');
+      const m = VB.modal({ titulo: `Notas sobre ${esc(VB.LIVROS[livro][1])} ${cap}.${v}`, largo: true, corpo: '<div class="carregando"></div>' });
+      const partes = await Promise.all(cods.map(async cod => {
+        const e2 = VB.estudoPorCod(cod);
+        try {
+          const d = await VB.api(`/api/estudo/${encodeURIComponent(cod)}/${livro}/${cap}`);
+          const ns = d.notas.filter(n => !n.artigo && Math.max(1, n.de || 1) === v);
+          if (!ns.length) return '';
+          return `<section class="outra-bloco"><h3>${VB.capaMini(e2)}<span>${esc(e2.titulo)}</span></h3>
+            <div class="nota-estudo">${ns.map(n => /^\s*<img/i.test(n.html)
+              ? `<figure class="ne ne-img">${n.html.replace(/^\s*(<img[^>]*>)/i, '$1<figcaption class="estudo-texto">')}</figcaption></figure>`
+              : `<div class="ne"><div class="estudo-texto">${n.html}</div></div>`).join('')}</div>
+            <button type="button" class="btn sec mini" data-abrir-estudo="${esc(cod)}">Ler na ${esc(e2.sigla)}</button></section>`;
+        } catch { return ''; }
+      }));
+      const corpo = m.el.querySelector('.modal-corpo');
+      corpo.innerHTML = partes.join('') || '<p class="muted">Não encontrei a nota.</p>';
+      corpo.querySelectorAll('[data-abrir-estudo]').forEach(x => x.addEventListener('click', () => {
+        VB.pref.set('versao', x.dataset.abrirEstudo); m.el.querySelector('[data-fechar]')?.click();
+        location.hash = VB.rotaBiblia(VB.LIVROS[livro], cap, v); VB.rota();
+      }));
+    });
+  };
 })();

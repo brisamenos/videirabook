@@ -909,6 +909,10 @@ html[data-tema="noite"] .biblia-texto .estudo-bloco { background: #1C211D; borde
 html[data-tema="noite"] .estudo-bloco > summary strong { color: #E3E6DF; }
 html[data-tema="noite"] .versoes .versao.versao-estudo[aria-checked="true"] { background: #2E2A1C; }
 
+/* escolha do texto bíblico dentro da Bíblia de estudo */
+.estudo-texto-sel { margin: .7rem 0 1.2rem; }
+.estudo-texto-sel label { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; font: 600 .85rem var(--sans); color: var(--suave); }
+.estudo-texto-sel select { width: auto; min-width: 0; max-width: 100%; padding: .45rem .7rem; font-size: .9rem; border-color: color-mix(in srgb, var(--ouro) 55%, var(--linha)); }
 /* imagens das Bíblias de estudo (fotos arqueológicas, mapas) */
 .nota-estudo .ne-img { margin: 0; }
 .nota-estudo .ne-img img, .estudo-texto img { display: block; max-width: 100%; height: auto; max-height: 320px; border-radius: var(--r-sm); cursor: zoom-in; background: #fff; }
@@ -936,3 +940,70 @@ html[data-tema="noite"] .grifador { background: #222823; border-color: #3A423B; 
 html[data-tema="noite"] .grifador button.atual { border-color: #F2EFE6; }
 @media (pointer: coarse) { .grifador button { width: 36px; height: 36px; } }
 @media (prefers-reduced-motion: reduce) { .grifador { animation: none; } }
+
+/* ───────── Prateleira das Bíblias de estudo */
+.prateleira { --capa-w: 118px; --capa-h: 172px; margin: 0 0 18px; padding: 20px 20px 16px; border-radius: var(--r-lg);
+  background: radial-gradient(120% 90% at 50% 0%, #2B4A37 0%, var(--vinho) 70%); color: #F1E6D2; box-shadow: var(--sombra); }
+.prateleira-cab h2 { margin: 0; font: 600 1.35rem/1.2 var(--serif); color: #F1E6D2; }
+.prateleira-cab p { margin: .2rem 0 1rem; font-size: .85rem; color: rgba(241, 230, 210, .72); }
+.prateleira-livros { overflow-x: auto; overflow-y: visible; scroll-snap-type: x proximity; padding: 10px 6px 4px; margin: 0 -6px; scrollbar-width: thin; }
+.prateleira .trilho { position: relative; display: flex; gap: 22px; width: max-content; min-width: 100%; padding: 0 10px; }
+.prateleira .trilho::before { content: ''; position: absolute; left: 0; right: 0; top: calc(var(--capa-h) - 4px); height: 16px; border-radius: 3px;
+  background: linear-gradient(180deg, #8A6440 0%, #6A4A2E 45%, #4A321F 100%); box-shadow: 0 10px 16px -8px rgba(0, 0, 0, .55), inset 0 1px 0 rgba(255, 255, 255, .18); }
+.livro-estudo { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 22px; width: var(--capa-w);
+  padding: 0; border: 0; background: none; color: inherit; cursor: pointer; scroll-snap-align: start; font: inherit; }
+.livro-estudo .capa { position: relative; display: block; width: var(--capa-w); height: var(--capa-h); border-radius: 3px 6px 6px 3px; overflow: hidden;
+  box-shadow: -3px 0 0 rgba(0, 0, 0, .25) inset, 0 12px 18px -10px rgba(0, 0, 0, .7); transition: transform .25s ease, box-shadow .25s ease; transform-origin: bottom center; }
+.livro-estudo .capa img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.livro-estudo .capa::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 7px; background: linear-gradient(90deg, rgba(0,0,0,.35), rgba(255,255,255,.12) 60%, transparent); }
+.livro-estudo:hover .capa, .livro-estudo:focus-visible .capa { transform: translateY(-8px) rotate(-1deg); box-shadow: -3px 0 0 rgba(0,0,0,.25) inset, 0 20px 24px -12px rgba(0,0,0,.75); }
+.livro-estudo:focus-visible { outline: none; }
+.livro-estudo:focus-visible .capa { outline: 2px solid var(--ouro); outline-offset: 3px; }
+.livro-estudo.atual .capa { transform: translateY(-6px); box-shadow: 0 0 0 2px var(--ouro), 0 18px 22px -12px rgba(0,0,0,.75); }
+.capa-falsa { display: flex; flex-direction: column; justify-content: center; gap: .4rem; height: 100%; padding: 12px; text-align: center;
+  background: linear-gradient(160deg, #3A2418, #5B3826); color: #F1E6D2; }
+.capa-falsa b { font: 700 1.2rem var(--serif); color: #E7C98A; }
+.capa-falsa small { font-size: .68rem; line-height: 1.3; opacity: .85; }
+.livro-estudo .fita { position: absolute; top: -2px; right: 12px; width: 18px; height: 34px; color: #C9A15A; filter: drop-shadow(0 2px 2px rgba(0,0,0,.4)); }
+.livro-estudo .fita svg { width: 100%; height: 100%; fill: currentColor; }
+.livro-estudo .rotulo { display: flex; flex-direction: column; align-items: center; gap: 1px; text-align: center; }
+.livro-estudo .rotulo b { font: 700 .86rem var(--sans); letter-spacing: .02em; color: #F1E6D2; }
+.livro-estudo .rotulo small { font-size: .72rem; color: rgba(241, 230, 210, .7); }
+@media (max-width: 560px) { .prateleira { --capa-w: 92px; --capa-h: 134px; padding: 16px 12px 12px; } .prateleira .trilho { gap: 16px; } }
+@media (prefers-reduced-motion: reduce) { .livro-estudo .capa { transition: none; } }
+
+/* capinha nas versões */
+.versoes .versao.com-capa { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto auto; column-gap: 10px; align-items: center; }
+.versoes .versao.com-capa .capa-mini { grid-row: 1 / span 2; }
+.capa-mini { width: 30px; height: 44px; object-fit: cover; border-radius: 2px 4px 4px 2px; box-shadow: 0 2px 6px -2px rgba(0,0,0,.45); flex: none; }
+
+/* ───────── Marcadores */
+.marcador-linha { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: -.4rem 0 1rem; min-height: 32px; }
+.btn-marcador svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.btn-marcador.ativo { background: var(--ouro-claro); border-color: var(--ouro); color: #7A5A22; }
+.btn-marcador.ativo svg { fill: var(--ouro); stroke: var(--ouro); }
+.marcador-ir { font-size: .85rem; color: var(--vinho-2); }
+.marcadores h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 .8rem; }
+.marcadores h3 svg { width: 18px; height: 18px; fill: var(--ouro); }
+.marcadores-lista { display: flex; flex-wrap: wrap; gap: 8px; }
+.marcadores-lista a { display: flex; flex-direction: column; padding: .55rem .8rem; border: 1px solid var(--linha); border-radius: var(--r-md); background: var(--papel); text-decoration: none; color: var(--tinta); min-width: 120px; }
+.marcadores-lista a:hover { border-color: var(--ouro); }
+.marcadores-lista b { font: 700 .82rem var(--sans); color: var(--folha); }
+.marcadores-lista span { font: 500 .95rem var(--serif); }
+html[data-tema="noite"] .btn-marcador.ativo { background: #2E2A1C; color: #E7C98A; }
+html[data-tema="noite"] .marcadores-lista a { background: #1C211D; border-color: #343B35; color: #E3E6DF; }
+
+/* ───────── Nota em outra Bíblia de estudo */
+.outra-nota { display: inline-flex; align-items: center; gap: 2px; margin-left: .35em; padding: 1px 6px 1px 4px; vertical-align: .12em;
+  border: 1px solid color-mix(in srgb, var(--ouro) 60%, transparent); border-radius: 999px; background: var(--ouro-claro); color: #7A5A22; cursor: pointer; font: 700 .62rem/1.4 var(--sans); }
+.outra-nota svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linejoin: round; }
+.outra-nota:hover, .outra-nota:focus-visible { background: var(--ouro); color: #fff; }
+.outra-bloco + .outra-bloco { margin-top: 1.4rem; padding-top: 1.2rem; border-top: 1px solid var(--linha-2); }
+.outra-bloco h3 { display: flex; align-items: center; gap: 10px; margin: 0 0 .7rem; font: 600 1.02rem var(--serif); }
+.outra-bloco .nota-estudo { margin: 0 0 .8rem; padding: .65rem .9rem; border-left: 3px solid var(--ouro); border-radius: 0 var(--r-md) var(--r-md) 0; background: color-mix(in srgb, var(--ouro-claro) 60%, transparent); }
+html[data-tema="noite"] .outra-nota { background: #2E2A1C; color: #E7C98A; border-color: #6B5A30; }
+html[data-tema="noite"] .outra-bloco .nota-estudo { background: #24261C; }
+
+.linha-estudo-cab { display: flex; gap: 12px; align-items: flex-start; }
+.capa-prof { flex: none; width: 54px; height: 78px; border-radius: 2px 5px 5px 2px; overflow: hidden; background: #4A321F; color: #E7C98A; display: grid; place-items: center; font: 700 .7rem var(--sans); box-shadow: 0 4px 10px -4px rgba(0,0,0,.4); }
+.capa-prof img { width: 100%; height: 100%; object-fit: cover; }

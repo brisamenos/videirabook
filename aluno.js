@@ -452,7 +452,7 @@
   };
   const chipsVersao = () => `<div class="versoes" role="radiogroup" aria-label="Versão da Bíblia">
     ${VB.VERSOES.map(v => `<button type="button" role="radio" class="versao" aria-checked="${v[0] === VB.versaoBiblia()}" data-versao="${v[0]}"><b>${v[1]}</b><span>${v[2]}</span></button>`).join('')}
-    ${VB.ESTUDOS.map(e => `<button type="button" role="radio" class="versao versao-estudo" aria-checked="${e.cod === VB.versaoBiblia()}" data-versao="${esc(e.cod)}"><b>${esc(e.sigla)}</b><span>${esc(e.titulo)}${e.baseSigla ? ` · texto ${esc(e.baseSigla)}` : ''}</span></button>`).join('')}</div>`;
+    ${VB.ESTUDOS.map(e => `<button type="button" role="radio" class="versao versao-estudo${e.capa ? ' com-capa' : ''}" aria-checked="${e.cod === VB.versaoBiblia()}" data-versao="${esc(e.cod)}">${VB.capaMini ? VB.capaMini(e) : ''}<b>${esc(e.sigla)}</b><span>${esc(e.titulo)} · texto ${esc(((VB.VERSOES.find(x => x[0] === VB.pref.get(`estudo_texto_${e.cod}`, e.base)) || [])[1]) || e.baseSigla || '')}</span></button>`).join('')}</div>`;
   const ligarChips = aoTrocar => $$('.versao').forEach(b => b.addEventListener('click', () => {
     VB.pref.set('versao', b.dataset.versao);
     $$('.versao').forEach(x => x.setAttribute('aria-checked', String(x === b)));
@@ -467,6 +467,8 @@
     $('#conteudo').innerHTML = `<div class="estreita biblia">
       <div class="saudacao"><div><h1>Bíblia</h1><p>Escolha a versão, o livro e o capítulo para ler aqui mesmo.</p></div></div>
       ${abasBiblia('ler')}
+      <div id="prateleira"></div>
+      <div id="lista-marcadores"></div>
       <section class="painel"><h3>Versão</h3>${chipsVersao()}
         <label class="campo" id="campo-comparar" style="margin:1rem 0 0"><span>Comparar com outra versão (versículo por versículo)</span>
           <select class="input" id="comparar"><option value="">Não comparar</option>${VB.VERSOES.filter(v => v[3]).map(v => `<option value="${v[0]}">${v[1]} — ${v[2]}</option>`).join('')}</select></label>
@@ -519,6 +521,8 @@
       location.hash = VB.rotaBiblia(l, cap, Number(m[3]) || (l[3] === 1 ? Number(m[2]) : 0));
     });
     atualizarComparar(); desenharLivros();
+    VB.montarPrateleira && VB.montarPrateleira($('#prateleira'));
+    VB.montarMarcadores && VB.montarMarcadores($('#lista-marcadores'));
   });
 
   // Leitor
@@ -537,28 +541,47 @@
       ${prox ? `<a class="btn sec mini" href="${VB.rotaBiblia(...prox)}">${esc(prox[0][1])} ${prox[1]} →</a>` : '<span></span>'}</nav>`;
     $('#conteudo').innerHTML = `<div class="leitor">
       <div class="leitor-cab"><div><span class="migalha"><a href="#/biblia">Bíblia</a></span><h1>${esc(livro[0])} ${cap}</h1></div>${navCap}</div>
+      <div id="marcador" class="marcador-linha"></div>
       ${chipsVersao()}
+      <div id="estudo-texto-sel" class="estudo-texto-sel" hidden></div>
       <div id="leitor-corpo" class="leitor-corpo"><div class="carregando"></div></div>
       ${navCap}
     </div>`;
     const desenhar = async () => {
       const v = VB.versaoBiblia(); const corpo = $('#leitor-corpo');
+      // Bíblia de estudo: as notas são dela, e o texto bíblico pode ser qualquer versão instalada
+      const est = VB.estudoPorCod(v);
+      const internas = VB.VERSOES.filter(x => x[3]);
+      let tv = v;
+      if (est) { tv = VB.pref.get(`estudo_texto_${v}`, est.base); if (!internas.some(x => x[0] === tv)) tv = est.base || (internas[0] || [])[0]; }
+      const sel = $('#estudo-texto-sel');
+      sel.hidden = !est;
+      if (est) {
+        sel.innerHTML = `<label><span>Texto bíblico da ${esc(est.sigla)}</span>
+          <select class="input">${internas.map(x => `<option value="${esc(x[0])}"${x[0] === tv ? ' selected' : ''}>${esc(x[1])} — ${esc(x[2])}</option>`).join('')}</select></label>`;
+        sel.querySelector('select').addEventListener('change', e => {
+          VB.pref.set(`estudo_texto_${v}`, e.target.value);
+          const chip = document.querySelector(`.versao[data-versao="${v}"] span`);
+          if (chip) chip.textContent = `${est.titulo} · texto ${(VB.VERSOES.find(x => x[0] === e.target.value) || [])[1] || ''}`;
+          desenhar();
+        });
+      }
       if (VB.versaoInterna(v)) {
         corpo.innerHTML = '<div class="carregando"></div>';
         const c = VB.pref.get('comparar', '');
-        const compara = c && c !== v && VB.versaoInterna(c) ? c : '';
+        const compara = c && c !== v && c !== tv && VB.versaoInterna(c) && !VB.estudoPorCod(c) ? c : '';
         let d, comp = null;
         try {
-          [d, comp] = await Promise.all([VB.api(`/api/biblia/${idx}/${cap}?v=${v}`), compara ? VB.api(`/api/biblia/${idx}/${cap}?v=${compara}`) : null]);
+          [d, comp] = await Promise.all([VB.api(`/api/biblia/${idx}/${cap}?v=${tv}`), compara ? VB.api(`/api/biblia/${idx}/${cap}?v=${compara}`) : null]);
         } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
         if (VB.versaoBiblia() !== v) return;   // trocou de versão enquanto carregava
-        corpo.innerHTML = `<div class="leitura biblia-texto${comp ? ' com-comparacao' : ''}" data-ctx-livro="${idx}" data-ctx-cap="${cap}" data-ctx-versao="${esc(v)}">${VB.htmlVersos(d, { destaque: verso, comp, acoes: true })}</div>
+        corpo.innerHTML = `<div class="leitura biblia-texto${comp ? ' com-comparacao' : ''}" data-ctx-livro="${idx}" data-ctx-cap="${cap}" data-ctx-versao="${esc(tv)}">${VB.htmlVersos(d, { destaque: verso, comp, acoes: true })}</div>
           <p class="pequeno muted biblia-credito">${esc(d.versao)} — ${esc(d.licenca)}${comp ? `<br>${esc(comp.versao)} — ${esc(comp.licenca)}` : ''}</p>`;
         if (verso) { const alvo = $(`#v${verso}`); if (alvo) setTimeout(() => alvo.scrollIntoView({ block: 'center' }), 50); }
         if (VB.COMENTARIOS.length) VB.api(`/api/comentarios/${idx}/${cap}/marcas`).then(vs => vs.forEach(n => {
           const b = corpo.querySelector(`.acao-verso[data-acao-v="${n}"]`); if (b) { b.classList.add('tem-com'); b.title = 'Tem comentário'; }
         })).catch(() => {});
-        if (VB.me && VB.me.estudo && VB.estudoLeitor) VB.estudoLeitor(corpo, { livro: idx, cap, versao: v, estudo: VB.estudoPorCod(v) });
+        if (VB.me && VB.me.estudo && VB.estudoLeitor) VB.estudoLeitor(corpo, { livro: idx, cap, versao: tv, estudo: est });
         return;
       }
       const url = urlExterna(livro, cap);
@@ -577,7 +600,13 @@
         $('#ler-alm').addEventListener('click', () => { VB.pref.set('versao', 'ara'); $$('.versao').forEach(x => x.setAttribute('aria-checked', String(x.dataset.versao === 'ara'))); desenhar(); });
       }
     };
-    ligarChips(desenhar);
+    const marcador = VB.botaoMarcador ? VB.botaoMarcador($('#marcador'), { livro: idx, cap }) : null;
+    ligarChips(() => {
+      // trocou de versão: se ela tem marcador em outro capítulo, vai para lá
+      if (VB.irParaMarcador && VB.irParaMarcador(VB.versaoBiblia(), { livro: idx, cap })) return;
+      if (marcador) marcador();
+      desenhar();
+    });
     desenhar();
   });
 

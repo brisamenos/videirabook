@@ -275,6 +275,12 @@ function notasDoCapitulo(arquivo, formato, livro0, cap) {
   return d.prepare('SELECT chapter AS c, fromverse AS de, toverse AS ate, data AS t FROM commentary WHERE book = ? AND chapter = ? ORDER BY fromverse, id').all(livro0 + 1, cap)
     .map(l => ({ cap: l.c, capAte: l.c, de: l.de || 0, ate: Math.max(l.ate || 0, l.de || 0), html: l.t }));
 }
+// Bíblia de estudo: títulos de seção e epígrafe próprios do capítulo (tabela opcional "titulos")
+function titulosDoCapitulo(arquivo, livro0, cap) {
+  const d = abrir(arquivo);
+  if (!temTabela(tabelas(d), 'titulos')) return null;
+  return d.prepare('SELECT verse AS v, tipo, texto AS t FROM titulos WHERE book = ? AND chapter = ? ORDER BY verse').all(livro0 + 1, cap);
+}
 // Versículos de um capítulo que têm comentário (para marcar no leitor)
 function versosComentados(arquivo, formato, livro0, cap) {
   const d = abrir(arquivo); const set = new Set();
@@ -335,4 +341,4 @@ function htmlVerbete(bruto, cod) {
   return html;
 }
 
-module.exports = { notasDoCapitulo, versoBruto, identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };
+module.exports = { titulosDoCapitulo, notasDoCapitulo, versoBruto, identificar, capitulo, buscar, comentarios, introducao, versosComentados, verbetes, verbeteBruto, verbetesExatos, verbetePorPrefixo, htmlVerbete, imagem, fechar, textoPuro, norm, escHtml };

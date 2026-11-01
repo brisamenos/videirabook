@@ -88,8 +88,16 @@ Uma Bíblia de estudo é lida como uma Bíblia: ela aparece junto com as versõe
 
 - O arquivo é um módulo do MySword (`.cmt.mybible`) com `estudo` no nome (ex.: `BEA-NVI.estudo.cmt.mybible`) ou com “Bíblia de Estudo” nos detalhes. Importe em **Módulos bíblicos**; ele aparece no bloco **Bíblias de estudo**, separado dos comentários.
 - Em **Bíblia de estudo**, o professor escolhe qual Bíblia instalada dá o texto de cada uma (ex.: a Arqueológica usa a NVI) e marca quais alunos podem usar. O professor sempre tem acesso; quem não está liberado não vê as Bíblias de estudo.
+- **Texto bíblico:** dentro da Bíblia de estudo dá para trocar a versão do texto (ARA, NVI, ACF…) sem perder as notas; a escolha fica guardada para cada Bíblia de estudo.
+- **Epígrafes:** se o módulo trouxer títulos de seção e sobrescritos dos Salmos (tabela `titulos`), eles aparecem no lugar dos da versão escolhida.
+- **Prateleira:** na página da Bíblia, as Bíblias de estudo aparecem como livros numa estante, com a capa. A capa vem do próprio arquivo (primeira página do PDF, guardada como `capa.jpg`); o professor pode enviar outra imagem em **Bíblia de estudo**.
+- **Nota em outra Bíblia de estudo:** um pequeno sinal no versículo mostra quantas outras Bíblias de estudo comentam aquele versículo; tocando nele, as notas abrem num pop-up.
 - **Imagens:** fotos arqueológicas, mapas e ilustrações que vêm no módulo aparecem embaixo do versículo, com a legenda; tocando na imagem ela abre grande.
 - **Grifar:** selecione um trecho do texto e escolha a cor (amarelo, verde, azul, rosa ou laranja). Toque num grifo para trocar a cor ou tirar. Cada pessoa vê só os próprios grifos, guardados por versão.
+
+## Marcadores
+
+Cada pessoa pode deixar um marcador em cada versão (comum ou de estudo) com o botão **Marcar aqui** no leitor. Ao trocar de versão ou escolher uma Bíblia na prateleira, o app vai direto para o marcador daquela versão. A lista **Seus marcadores** fica na página da Bíblia.
 
 ## Regras de liberação
 

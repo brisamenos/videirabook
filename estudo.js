@@ -1,7 +1,19 @@
 // VideiraBook — Bíblia de estudo (notas no rodapé do capítulo) e grifos no texto bíblico
 // Só para quem o professor liberar. O professor sempre tem acesso.
-const { db } = require('./db');
+const fs = require('fs');
+const path = require('path');
+const { db, DATA_DIR } = require('./db');
 const BIB = require('./biblioteca');
+const ms = require('./mysword');
+
+// Capa: a que o professor enviou (fica no volume) ou a que vem dentro do módulo ("capa.jpg")
+const PASTA_CAPAS = path.join(DATA_DIR, 'capas');
+fs.mkdirSync(PASTA_CAPAS, { recursive: true });
+const capaEnviada = cod => { const p = path.join(PASTA_CAPAS, `${String(cod).replace(/[^a-z0-9]/gi, '')}.img`); return fs.existsSync(p) ? p : null; };
+function capaDoModulo(r) {
+  try { const im = ms.imagem(BIB.caminho(r), 'capa.jpg'); return im && im.content ? Buffer.from(im.content) : null; } catch { return null; }
+}
+function temCapa(r) { return !!(capaEnviada(r.cod) || capaDoModulo(r)); }
 
 function podeEstudo(u) {
   if (!u) return false;
@@ -13,7 +25,7 @@ function podeEstudo(u) {
 const CORES = ['amarelo', 'verde', 'azul', 'rosa', 'laranja'];
 const versaoOk = v => String(v || '').replace(/[^a-z0-9]/gi, '').slice(0, 20);
 
-module.exports = function (app, P, auth, h) {
+module.exports = function (app, P, auth, h, upload) {
   const so = (req, res, next) => podeEstudo(req.user) ? next() : res.status(403).json({ erro: 'A Bíblia de estudo não está liberada para você. Fale com o professor.' });
 
   // Módulos de estudo disponíveis
@@ -28,6 +40,26 @@ module.exports = function (app, P, auth, h) {
     if (!r) return res.status(404).json({ erro: 'Bíblia de estudo não encontrada.' });
     res.set('Cache-Control', 'private, max-age=3600');
     res.json(r);
+  }));
+
+  // Capa da Bíblia de estudo (prateleira)
+  app.get('/api/estudo/:cod/capa', auth, so, h((req, res) => {
+    const r = BIB.porCod(req.params.cod);
+    if (!r || !r.estudo) return res.status(404).end();
+    const enviada = capaEnviada(r.cod);
+    const b = enviada ? fs.readFileSync(enviada) : capaDoModulo(r);
+    if (!b) return res.status(404).end();
+    const tipo = b[0] === 0x89 ? 'image/png' : b[0] === 0x52 ? 'image/webp' : 'image/jpeg';
+    res.set({ 'Content-Type': tipo, 'Cache-Control': 'private, max-age=600' }).send(b);
+  }));
+  // Quais versículos do capítulo têm nota em cada Bíblia de estudo (para o sinal de "nota em outra Bíblia")
+  app.get('/api/estudo-marcas/:livro/:cap', auth, so, h((req, res) => {
+    const l = Number(req.params.livro), c = Number(req.params.cap); const out = {};
+    for (const r of BIB.listar('comentario', { estudo: true })) {
+      // só o versículo onde a nota começa (uma nota de 1.1-31 não marca o capítulo inteiro)
+      try { const vs = [...new Set(ms.notasDoCapitulo(BIB.caminho(r), r.formato, l, c).filter(n => !/^\s*<h3/i.test(n.html)).map(n => Math.max(1, n.de || 1)))]; if (vs.length) out[r.cod] = vs; } catch {}
+    }
+    res.set('Cache-Control', 'private, max-age=600'); res.json(out);
   }));
 
   // ── Grifos
@@ -74,11 +106,43 @@ module.exports = function (app, P, auth, h) {
     res.json({ ok: true });
   }));
 
+  // ── Marcadores: um por versão (Bíblia comum ou de estudo), para cada pessoa
+  app.get('/api/marcadores', auth, h((req, res) => {
+    res.json(db.prepare('SELECT versao, livro, cap, verso, atualizado_em FROM marcadores WHERE usuario_id = ? ORDER BY atualizado_em DESC').all(req.user.id));
+  }));
+  app.put('/api/marcadores/:versao', auth, h((req, res) => {
+    const b = req.body || {}; const livro = Number(b.livro), cap = Number(b.cap), verso = Math.max(0, Number(b.verso) || 0);
+    if (!(livro >= 0 && livro < 66) || !(cap >= 1)) return res.status(400).json({ erro: 'Referência inválida.' });
+    db.prepare(`INSERT INTO marcadores (usuario_id, versao, livro, cap, verso, atualizado_em) VALUES (?,?,?,?,?, datetime('now','localtime'))
+      ON CONFLICT(usuario_id, versao) DO UPDATE SET livro = excluded.livro, cap = excluded.cap, verso = excluded.verso, atualizado_em = excluded.atualizado_em`)
+      .run(req.user.id, versaoOk(req.params.versao), livro, cap, verso);
+    res.json({ ok: true });
+  }));
+  app.delete('/api/marcadores/:versao', auth, h((req, res) => {
+    db.prepare('DELETE FROM marcadores WHERE usuario_id = ? AND versao = ?').run(req.user.id, versaoOk(req.params.versao));
+    res.json({ ok: true });
+  }));
+
+  // ── Professor: capa enviada para uma Bíblia de estudo
+  if (upload) P.post('/estudo/modulos/:cod/capa', upload.single('capa'), h((req, res) => {
+    const r = BIB.porCod(req.params.cod);
+    if (!req.file) return res.status(400).json({ erro: 'Escolha a imagem da capa.' });
+    const okTipo = /^image\/(jpeg|png|webp)$/.test(req.file.mimetype || '');
+    if (!r || !r.estudo || !okTipo) { fs.promises.unlink(req.file.path).catch(() => {}); return res.status(400).json({ erro: okTipo ? 'Bíblia de estudo não encontrada.' : 'Envie uma imagem JPG, PNG ou WEBP.' }); }
+    const destino = path.join(PASTA_CAPAS, `${r.cod.replace(/[^a-z0-9]/gi, '')}.img`);
+    try { fs.renameSync(req.file.path, destino); } catch { fs.copyFileSync(req.file.path, destino); fs.unlinkSync(req.file.path); }
+    res.json({ ok: true });
+  }));
+  P.delete('/estudo/modulos/:cod/capa', h((req, res) => {
+    const p = capaEnviada(req.params.cod); if (p) fs.unlinkSync(p);
+    res.json({ ok: true });
+  }));
+
   // ── Professor: quem pode usar e quais módulos são Bíblia de estudo
   P.get('/estudo', h((req, res) => {
     res.json({
-      modulos: db.prepare("SELECT cod, sigla, titulo, estudo, ativo, base FROM biblioteca WHERE tipo = 'comentario' ORDER BY estudo DESC, ordem, id").all()
-        .map(m => ({ ...m, base: m.estudo ? (BIB.baseDoEstudo(m) || {}).cod || '' : '' })),
+      modulos: db.prepare("SELECT * FROM biblioteca WHERE tipo = 'comentario' ORDER BY estudo DESC, ordem, id").all()
+        .map(m => ({ cod: m.cod, sigla: m.sigla, titulo: m.titulo, estudo: m.estudo, ativo: m.ativo, base: m.estudo ? (BIB.baseDoEstudo(m) || {}).cod || '' : '', capa: m.estudo ? temCapa(m) : false, capaEnviada: !!capaEnviada(m.cod) })),
       biblias: BIB.listar('biblia').map(b => ({ cod: b.cod, sigla: b.sigla, titulo: b.titulo })),
       usuarios: db.prepare("SELECT id, nome, usuario, pode_estudo, ativo FROM usuarios WHERE papel = 'aluno' ORDER BY nome").all(),
     });
@@ -97,3 +161,4 @@ module.exports = function (app, P, auth, h) {
   }));
 };
 module.exports.podeEstudo = podeEstudo;
+module.exports.temCapa = temCapa;
