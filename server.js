@@ -810,6 +810,24 @@ app.get('/api/dicionario/:cod', auth, h((req, res) => {
   if (!BIB.dicionario(req.params.cod)) return res.status(404).json({ erro: 'Dicionário não encontrado.' });
   res.json(BIB.verbetes(req.params.cod, String(req.query.q || '').slice(0, 60)));
 }));
+// Significado de uma palavra em todos os dicionários instalados (tocar e segurar na palavra)
+app.get('/api/significado', auth, h((req, res) => {
+  const p = String(req.query.p || '').trim().slice(0, 40);
+  if (!p) return res.json([]);
+  const lo = p.toLowerCase();
+  // formas para procurar: a palavra, singular, masculino
+  const formas = [p, lo];
+  const regras = [[/ões$/, 'ão'], [/ães$/, 'ão'], [/ãos$/, 'ão'], [/ais$/, 'al'], [/éis$/, 'el'], [/eis$/, 'il'], [/óis$/, 'ol'], [/is$/, 'il'], [/ns$/, 'm'], [/res$/, 'r'], [/zes$/, 'z'], [/ses$/, 's'], [/s$/, ''], [/as$/, 'o'], [/a$/, 'o'], [/inha$/, 'inho'], [/zinho$/, '']];
+  for (const [re, r] of regras) if (re.test(lo)) formas.push(lo.replace(re, r));
+  const out = [];
+  for (const d of BIB.listar('dicionario')) {
+    let v = null;
+    for (const f of [...new Set(formas)]) { try { v = BIB.verbete(d.cod, f); } catch { v = null; } if (v) break; }
+    if (v) out.push({ cod: d.cod, ...v });
+  }
+  res.set('Cache-Control', 'private, max-age=600');
+  res.json(out);
+}));
 app.get('/api/dicionario/:cod/verbete', auth, h((req, res) => {
   const v = BIB.verbete(req.params.cod, String(req.query.p || ''));
   if (!v) return res.status(404).json({ erro: 'Verbete não encontrado.' });

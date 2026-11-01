@@ -204,6 +204,8 @@ CREATE TABLE IF NOT EXISTS marcadores (
   atualizado_em TEXT DEFAULT (datetime('now','localtime')),
   PRIMARY KEY (usuario_id, versao)
 );`);
+// texto grifado (para a lista "Meus grifos", inclusive grifos feitos nas notas de estudo)
+try { db.exec('ALTER TABLE grifos ADD COLUMN trecho TEXT'); } catch { /* já existe */ }
 
 // Frases iniciais de homens de Deus (o professor pode editar, desativar e acrescentar)
 if (!db.prepare('SELECT COUNT(*) n FROM frases').get().n) {

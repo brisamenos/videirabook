@@ -1109,3 +1109,13 @@ html, body { overflow-x: clip; }
 .nav::-webkit-scrollbar { display: none; }
 .nav a { white-space: nowrap; }
 @media (max-width: 1060px) { .topo .usuario-chip .nome { display: none; } }
+/* dicionário ao tocar e segurar */
+.leitor-corpo .biblia-texto, .leitor-corpo .estudo-texto { -webkit-touch-callout: none; }
+.sig-dic { border: 1px solid var(--linha-2); border-radius: var(--r-md); margin-bottom: 10px; background: var(--papel); }
+.sig-dic > summary { cursor: pointer; padding: 10px 14px; display: flex; gap: 10px; align-items: baseline; list-style: none; }
+.sig-dic > summary::-webkit-details-marker { display: none; }
+.sig-dic > summary b { color: var(--vinho); font-family: var(--serif); font-size: 1.05rem; }
+.sig-dic > summary span { color: var(--suave); font-size: .82rem; }
+.sig-dic .verbete { padding: 0 14px 12px; font-size: 1rem; max-height: 50vh; overflow: auto; }
+.sig-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+.leitor .estudo-texto mark.grifo { border-radius: 2px; }

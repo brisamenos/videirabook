@@ -25,9 +25,34 @@
       r.surroundContents(m);
     }
   }
-  function aplicarGrifos(raiz, lista) {
-    limparGrifos(raiz);
-    for (const g of lista) { const p = raiz.querySelector(`p#v${g.verso}`); if (p) { try { pintar(p, g); } catch { /* texto mudou */ } } }
+  function aplicarGrifos(raiz, lista, notas) {
+    raiz.querySelectorAll('mark.grifo').forEach(m => { if (!!m.closest('[data-gkey]') === !!notas) { const pai = m.parentNode; while (m.firstChild) pai.insertBefore(m.firstChild, m); m.remove(); pai.normalize(); } });
+    for (const g of lista) {
+      const p = notas ? raiz.querySelector(`[data-gkey="${g.verso}"]`) : raiz.querySelector(`p#v${g.verso}`);
+      if (p) { try { pintar(p, g); } catch { /* texto mudou */ } }
+    }
+  }
+  // trecho selecionado dentro de uma nota de estudo (posições no texto da nota)
+  function selecaoNaNota(range) {
+    const no = range.commonAncestorContainer; const el = (no.nodeType === 1 ? no : no.parentElement).closest('[data-gkey]');
+    if (!el) return null;
+    let pos = 0, ini = null, fim = null;
+    for (const tn of textos(el)) {
+      if (range.intersectsNode(tn)) {
+        const s = tn === range.startContainer ? range.startOffset : 0;
+        const e = tn === range.endContainer ? range.endOffset : tn.length;
+        if (e > s) { if (ini === null) ini = pos + s; fim = pos + e; }
+      }
+      pos += tn.length;
+    }
+    if (ini === null) return null;
+    const t = textoDe(el);
+    while (ini < fim && /\s/.test(t[ini])) ini++;
+    while (fim > ini && /\s/.test(t[fim - 1])) fim--;
+    const letra = c => c && /[\p{L}\p{N}'’-]/u.test(c);
+    while (ini > 0 && letra(t[ini - 1]) && letra(t[ini])) ini--;
+    while (fim < t.length && letra(t[fim]) && letra(t[fim - 1])) fim++;
+    return fim > ini ? { el, verso: Number(el.dataset.gkey), ini, fim, texto: t } : null;
   }
 
   // Trechos selecionados, versículo por versículo
@@ -86,20 +111,25 @@
     if (!VB.me || !VB.me.estudo) return;
     const texto = corpo.querySelector('.biblia-texto'); if (!texto) return;
     texto.classList.add('grifavel');
-    let grifos = [];
+    let grifos = [], grifosN = [];
+    const vNota = estudo ? `nota${estudo.cod}` : null;   // grifos feitos nas notas desta Bíblia de estudo
     const carregarGrifos = async () => {
-      try { grifos = await VB.api(`/api/grifos/${encodeURIComponent(versao)}/${livro}/${cap}`); aplicarGrifos(texto, grifos); } catch { /* sem grifos */ }
+      try { grifos = await VB.api(`/api/grifos/${encodeURIComponent(versao)}/${livro}/${cap}`); aplicarGrifos(texto, grifos, false); } catch { /* sem grifos */ }
     };
-    const salvar = async (trechos, cor) => {
+    const carregarGrifosN = async () => {
+      if (!vNota) return;
+      try { grifosN = await VB.api(`/api/grifos/${encodeURIComponent(vNota)}/${livro}/${cap}`); aplicarGrifos(texto, grifosN, true); } catch { /* sem grifos */ }
+    };
+    const salvar = async (trechos, cor, naNota) => {
       try {
-        for (const t of trechos) await VB.api('/api/grifos', { method: 'POST', body: { versao, livro, cap, ...t, cor } });
+        for (const t of trechos) await VB.api('/api/grifos', { method: 'POST', body: { versao: naNota ? vNota : versao, livro, cap, verso: t.verso, ini: t.ini, fim: t.fim, texto: t.texto, cor } });
         VB.pref.set('grifo_cor', cor);
       } catch (e) { VB.erro(e); }
-      await carregarGrifos();
+      await (naNota ? carregarGrifosN() : carregarGrifos());
     };
-    const tirar = async ids => {
+    const tirar = async (ids, naNota) => {
       try { for (const id of ids) await VB.api(`/api/grifos/${id}`, { method: 'DELETE' }); } catch (e) { VB.erro(e); }
-      await carregarGrifos();
+      await (naNota ? carregarGrifosN() : carregarGrifos());
     };
 
     // Seleção de texto → barra de cores
@@ -112,7 +142,18 @@
         if (!sel || sel.isCollapsed || !sel.rangeCount) { if (estado && estado.tipo === 'selecao') fecharBarra(); return; }
         const r = sel.getRangeAt(0);
         if (!texto.contains(r.commonAncestorContainer)) return;
-        const trechos = selecaoPorVerso(r, texto);
+        if (Date.now() - (VB._dicEm || 0) < 1500) return;   // acabou de abrir o dicionário (tocar e segurar)
+        const tn = vNota ? selecaoNaNota(r) : null;
+        if (tn) {
+          const tocadosN = grifosN.filter(g => g.verso === tn.verso && g.ini < tn.fim && g.fim > tn.ini).map(g => g.id);
+          abrirBarra(r.getBoundingClientRect(), {
+            tipo: 'selecao', remover: tocadosN.length > 0,
+            aoCor: cor => { sel.removeAllRanges(); salvar([tn], cor, true); },
+            aoTirar: () => { sel.removeAllRanges(); tirar(tocadosN, true); },
+          });
+          return;
+        }
+        const trechos = selecaoPorVerso(r, texto).map(t => ({ ...t, texto: textoDe(texto.querySelector(`p#v${t.verso}`)) }));
         if (!trechos.length) return;
         const tocados = grifos.filter(g => trechos.some(t => t.verso === g.verso && g.ini < t.fim && g.fim > t.ini)).map(g => g.id);
         abrirBarra(r.getBoundingClientRect(), {
@@ -128,13 +169,14 @@
     texto.addEventListener('click', e => {
       const m = e.target.closest('mark.grifo'); if (!m) return;
       const sel = getSelection(); if (sel && !sel.isCollapsed) return;
-      const id = Number(m.dataset.grifo); const g = grifos.find(x => x.id === id); if (!g) return;
+      const naNota = !!m.closest('[data-gkey]');
+      const id = Number(m.dataset.grifo); const g = (naNota ? grifosN : grifos).find(x => x.id === id); if (!g) return;
       const partes = [...texto.querySelectorAll(`mark.grifo[data-grifo="${id}"]`)];
       const r = document.createRange(); r.setStartBefore(partes[0]); r.setEndAfter(partes[partes.length - 1]);
       abrirBarra(r.getBoundingClientRect(), {
         tipo: 'grifo', remover: true, cor: g.cor,
-        aoCor: async cor => { try { await VB.api(`/api/grifos/${id}`, { method: 'PUT', body: { cor } }); } catch (er) { VB.erro(er); } carregarGrifos(); },
-        aoTirar: () => tirar([id]),
+        aoCor: async cor => { try { await VB.api(`/api/grifos/${id}`, { method: 'PUT', body: { cor } }); } catch (er) { VB.erro(er); } naNota ? carregarGrifosN() : carregarGrifos(); },
+        aoTirar: () => tirar([id], naNota),
       });
     });
 
@@ -155,7 +197,7 @@
       barraV.onclick = async e => {
         const b = e.target.closest('button'); if (!b) return;
         if (b.dataset.cor) {
-          const trechos = vs.map(v => { const p = texto.querySelector(`p#v${v}`); const t = p ? textoDe(p) : ''; const ini = t.length - t.trimStart().length; return { verso: v, ini, fim: t.trimEnd().length }; }).filter(t => t.fim > t.ini);
+          const trechos = vs.map(v => { const p = texto.querySelector(`p#v${v}`); const t = p ? textoDe(p) : ''; const ini = t.length - t.trimStart().length; return { verso: v, ini, fim: t.trimEnd().length, texto: t }; }).filter(t => t.fim > t.ini);
           fecharBarraV(); await salvar(trechos, b.dataset.cor);
         } else if (b.hasAttribute('data-tirar')) {
           const ids = grifos.filter(g => vs.includes(g.verso)).map(g => g.id); fecharBarraV(); await tirar(ids);
@@ -173,6 +215,7 @@
     addEventListener('hashchange', fecharBarraV, { once: true });
 
     await Promise.all([carregarGrifos(), estudo ? montarNotas(corpo, texto, estudo, { livro, cap }) : null]);
+    await carregarGrifosN();
     VB.outrasNotas(texto, { livro, cap, atual: estudo ? estudo.cod : '' });
   };
 
@@ -198,11 +241,12 @@
       // notas primeiro, imagens (com legenda) depois
       const ehImagem = n => /^\s*<img/i.test(n.html);
       const ordenadas = [...notas.filter(n => !ehImagem(n)), ...notas.filter(ehImagem)];
+      let j = 0; const chave = () => v * 100 + Math.min(99, j++);
       if (ordenadas.length) html += `<aside class="nota-estudo" aria-label="Nota de estudo">${ordenadas.map(n => ehImagem(n)
-        ? `<figure class="ne ne-img">${n.html.replace(/^\s*(<img[^>]*>)/i, '$1<figcaption class="estudo-texto">').replace(/$/, '</figcaption>')}</figure>`
-        : `<div class="ne"><span class="ne-ref">${esc(refDe(n))}</span><div class="estudo-texto">${semRef(n.html)}</div></div>`).join('')}</aside>`;
+        ? `<figure class="ne ne-img">${n.html.replace(/^\s*(<img[^>]*>)/i, `$1<figcaption class="estudo-texto" data-gkey="${chave()}">`).replace(/$/, '</figcaption>')}</figure>`
+        : `<div class="ne"><span class="ne-ref">${esc(refDe(n))}</span><div class="estudo-texto" data-gkey="${chave()}">${semRef(n.html)}</div></div>`).join('')}</aside>`;
       html += artigos.map(a => `<details class="estudo-bloco estudo-artigo"><summary><span class="estudo-tipo">${esc(a.categoria || 'Artigo')}</span><strong>${esc(a.titulo || 'Artigo')}</strong></summary>
-        <div class="estudo-texto">${a.html}</div></details>`).join('');
+        <div class="estudo-texto" data-gkey="${chave()}">${a.html}</div></details>`).join('');
       ancora.insertAdjacentHTML('afterend', html);
     }
     // epígrafes da própria Bíblia de estudo (títulos de seção e sobrescrito dos Salmos) no lugar das da versão do texto
@@ -220,7 +264,7 @@
     }
     if (d.intro && d.intro.length) {
       texto.insertAdjacentHTML('afterbegin', `<details class="estudo-bloco estudo-intro"><summary><span class="estudo-tipo">Introdução ao livro</span><strong>${esc(VB.LIVROS[livro][0])}</strong></summary>
-        <div class="estudo-texto">${d.intro.join('')}</div></details>`);
+        <div class="estudo-texto" data-gkey="1">${d.intro.join('')}</div></details>`);
     }
     const credito = corpo.querySelector('.biblia-credito');
     if (credito) credito.insertAdjacentHTML('afterbegin', `${esc(d.titulo)}${d.creditos ? ` — ${esc(d.creditos)}` : ''}<br>Texto bíblico: `);
@@ -312,7 +356,8 @@
     let lista;
     try { lista = await VB.api('/api/grifos'); } catch (e) { m.el.querySelector('.modal-corpo').innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
     const corpo = m.el.querySelector('.modal-corpo');
-    if (!lista.length) { corpo.innerHTML = '<p class="muted">Você ainda não grifou nada. No leitor, toque em um ou mais versículos (ou selecione um trecho) e escolha a cor.</p>'; return; }
+    lista = lista.filter(g => !g.nota || VB.estudoPorCod(g.nota));
+    if (!lista.length) { corpo.innerHTML = '<p class="muted">Você ainda não grifou nada. No leitor, toque em um ou mais versículos, ou selecione um trecho do texto ou de uma nota, e escolha a cor.</p>'; return; }
     const CORES = ['amarelo', 'verde', 'azul', 'rosa', 'laranja'];
     let filtro = '';
     const desenhar = () => {
@@ -320,8 +365,9 @@
       let livroAnt = -1, html = '';
       for (const g of vis) {
         if (g.livro !== livroAnt) { html += `<h4 class="fg-livro">${esc(VB.LIVROS[g.livro][0])}</h4>`; livroAnt = g.livro; }
-        html += `<a class="fg-item" href="${VB.rotaBiblia(VB.LIVROS[g.livro], g.cap, g.verso)}" data-versao="${esc(g.versao)}">
-          <span class="fg-cor g-${esc(g.cor)}"></span><span class="fg-tx"><b>${esc(VB.LIVROS[g.livro][1])} ${g.cap}.${g.verso}</b><small>${esc(nomeVersao(g.versao))}</small>
+        const est = g.nota ? VB.estudoPorCod(g.nota) : null;
+        html += `<a class="fg-item" href="${VB.rotaBiblia(VB.LIVROS[g.livro], g.cap, g.verso)}" data-versao="${esc(g.nota || g.versao)}"${g.nota ? ' data-nota="1"' : ''}>
+          <span class="fg-cor g-${esc(g.cor)}"></span><span class="fg-tx"><b>${esc(VB.LIVROS[g.livro][1])} ${g.cap}.${g.verso}</b><small>${g.nota ? `Nota da ${esc(est ? est.sigla : g.nota)}` : esc(nomeVersao(g.versao))}</small>
           ${g.trecho ? `<span class="fg-trecho">${esc(g.trecho)}</span>` : ''}</span></a>`;
       }
       corpo.innerHTML = `<div class="fg-filtro" role="group" aria-label="Filtrar por cor"><button type="button" data-cor="" aria-pressed="${!filtro}">Todos (${lista.length})</button>
@@ -330,7 +376,8 @@
       corpo.querySelectorAll('[data-cor]').forEach(b => b.addEventListener('click', () => { filtro = b.dataset.cor; desenhar(); }));
       corpo.querySelectorAll('.fg-item').forEach(a => a.addEventListener('click', () => {
         // abre na versão em que o grifo foi feito, se a versão atual mostrar outro texto
-        if (VB.textoDaVersao(VB.versaoBiblia()) !== a.dataset.versao) VB.pref.set('versao', a.dataset.versao);
+        if (a.dataset.nota) { if (VB.versaoBiblia() !== a.dataset.versao) VB.pref.set('versao', a.dataset.versao); }
+        else if (VB.textoDaVersao(VB.versaoBiblia()) !== a.dataset.versao) VB.pref.set('versao', a.dataset.versao);
         m.fechar();
         if (location.hash === a.getAttribute('href')) setTimeout(() => VB.rota(), 0);
       }));
@@ -469,4 +516,69 @@
       }));
     });
   };
+})();
+
+/* ── Tocar e segurar numa palavra: significado nos dicionários instalados */
+(function () {
+  const { esc } = VB;
+  const LETRA = /[\p{L}'’-]/u;
+  function palavraNoPonto(x, y) {
+    let no, off;
+    if (document.caretPositionFromPoint) { const p = document.caretPositionFromPoint(x, y); if (!p) return null; no = p.offsetNode; off = p.offset; }
+    else if (document.caretRangeFromPoint) { const r = document.caretRangeFromPoint(x, y); if (!r) return null; no = r.startContainer; off = r.startOffset; }
+    if (!no || no.nodeType !== 3) return null;
+    const t = no.nodeValue; let a = off, b = off;
+    while (a > 0 && LETRA.test(t[a - 1])) a--;
+    while (b < t.length && LETRA.test(t[b])) b++;
+    const w = t.slice(a, b).replace(/^['’-]+|['’-]+$/g, '');
+    if (w.length < 2) return null;
+    const r = document.createRange(); r.setStart(no, a); r.setEnd(no, b);
+    return { palavra: w, range: r };
+  }
+  async function mostrar(palavra, range) {
+    VB._dicEm = Date.now();
+    const m = VB.modal({ titulo: `Significado: ${esc(palavra)}`, largo: true, corpo: '<div class="carregando"></div>' });
+    m.el.classList.add('folha-fundo'); m.el.querySelector('.modal').classList.add('folha');
+    const corpo = m.el.querySelector('.modal-corpo');
+    let lista = [];
+    try { lista = await VB.api(`/api/significado?p=${encodeURIComponent(palavra)}`); } catch (e) { corpo.innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
+    const acoes = `<div class="sig-acoes">
+      ${range ? '<button type="button" class="btn sec mini" data-sel>Selecionar para grifar</button>' : ''}
+      <a class="btn sec mini" href="#/concordancia/${encodeURIComponent(VB.versaoInterna(VB.versaoBiblia()) ? VB.textoDaVersao(VB.versaoBiblia()) : 'ara')}/${encodeURIComponent(palavra)}">Onde mais aparece (concordância)</a></div>`;
+    if (!lista.length) {
+      corpo.innerHTML = `<p class="muted">${VB.DICIONARIOS && VB.DICIONARIOS.length ? 'Nenhum dos dicionários instalados tem essa palavra.' : 'Nenhum dicionário instalado. O professor pode importar em Módulos bíblicos.'}</p>${acoes}`;
+    } else {
+      corpo.innerHTML = lista.map((v, i) => `<details class="sig-dic"${i < 2 ? ' open' : ''}><summary><b>${esc(v.sigla || v.dicionario)}</b><span>${esc(v.dicionario)}${v.palavra && v.palavra.toLowerCase() !== palavra.toLowerCase() ? ` · ${esc(v.palavra)}` : ''}</span></summary>
+        <div class="leitura verbete popup-versos" data-dic="${esc(v.cod)}">${v.html}</div></details>`).join('') + acoes;
+      corpo.querySelectorAll('[data-dic]').forEach(d => VB.prepararVerbete && VB.prepararVerbete(d));
+    }
+    corpo.querySelector('[data-sel]')?.addEventListener('click', () => {
+      m.fechar(); VB._dicEm = 0;
+      const s = getSelection(); s.removeAllRanges(); s.addRange(range);
+    });
+    corpo.querySelectorAll('a[href^="#/concordancia"]').forEach(a => a.addEventListener('click', () => m.fechar()));
+  }
+
+  let timer = null, ini = null, disparou = false;
+  const AREA = '.leitor-corpo .biblia-texto, .leitor-corpo .estudo-texto, .modal .estudo-texto';
+  document.addEventListener('pointerdown', e => {
+    if (e.button > 0) return;
+    const alvo = e.target.closest(AREA); if (!alvo || e.target.closest('button, a, input, select, summary, img')) return;
+    ini = { x: e.clientX, y: e.clientY }; disparou = false;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const w = palavraNoPonto(ini.x, ini.y); if (!w) return;
+      disparou = true;
+      setTimeout(() => { const s = getSelection(); if (s) s.removeAllRanges(); }, 30);
+      mostrar(w.palavra, w.range);
+    }, 550);
+  }, { passive: true });
+  const cancela = e => { if (!timer) return; if (e && e.type === 'pointermove' && ini && Math.hypot(e.clientX - ini.x, e.clientY - ini.y) < 10) return; clearTimeout(timer); timer = null; };
+  document.addEventListener('pointermove', cancela, { passive: true });
+  document.addEventListener('pointerup', () => { clearTimeout(timer); timer = null; });
+  document.addEventListener('pointercancel', () => { clearTimeout(timer); timer = null; });
+  addEventListener('scroll', () => { clearTimeout(timer); timer = null; }, { passive: true });
+  // depois de abrir o dicionário, o toque não vira "selecionar versículo" nem abre o menu do sistema
+  document.addEventListener('click', e => { if (disparou && e.target.closest(AREA)) { e.stopPropagation(); e.preventDefault(); disparou = false; } }, true);
+  document.addEventListener('contextmenu', e => { if (e.target.closest(AREA) && (disparou || timer)) e.preventDefault(); });
 })();

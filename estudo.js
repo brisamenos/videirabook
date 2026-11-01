@@ -67,12 +67,15 @@ module.exports = function (app, P, auth, h, upload) {
     res.json(db.prepare('SELECT id, verso, ini, fim, cor FROM grifos WHERE usuario_id = ? AND versao = ? AND livro = ? AND cap = ? ORDER BY verso, ini')
       .all(req.user.id, versaoOk(req.params.versao), Number(req.params.livro), Number(req.params.cap)));
   }));
-  // Todos os meus grifos (lista)
+  // Todos os meus grifos (lista). Grifos em notas de estudo: versao = "nota" + código; verso = versículo × 100 + ordem
   app.get('/api/grifos', auth, so, h((req, res) => {
-    const lista = db.prepare('SELECT id, versao, livro, cap, verso, ini, fim, cor, criado_em FROM grifos WHERE usuario_id = ? ORDER BY livro, cap, verso, ini LIMIT 5000').all(req.user.id);
+    const lista = db.prepare('SELECT id, versao, livro, cap, verso, ini, fim, cor, trecho, criado_em FROM grifos WHERE usuario_id = ? ORDER BY livro, cap, verso, ini LIMIT 5000').all(req.user.id);
     // trecho grifado (texto simples do versículo, cortado nas posições do grifo)
     const caps = new Map();
     for (const g of lista) {
+      // grifo numa nota de estudo: versao = "n" + código da Bíblia de estudo; verso = versículo × 100 + ordem da nota
+      if (/^nota/.test(g.versao) && BIB.porCod(g.versao.slice(4))) { g.nota = g.versao.slice(4); g.verso = Math.max(1, Math.floor(g.verso / 100)); continue; }
+      if (g.trecho) continue;
       const k = `${g.versao}|${g.livro}|${g.cap}`;
       if (!caps.has(k)) { try { const t = BIB.trecho(g.versao, g.livro, g.cap); caps.set(k, t ? new Map(t.linhas) : null); } catch { caps.set(k, null); } }
       const m = caps.get(k); const v = m && m.get(g.verso);
@@ -91,16 +94,19 @@ module.exports = function (app, P, auth, h, upload) {
       const sobre = db.prepare('SELECT id, ini, fim, cor FROM grifos WHERE usuario_id = ? AND versao = ? AND livro = ? AND cap = ? AND verso = ? AND ini <= ? AND fim >= ?')
         .all(req.user.id, versao, livro, cap, verso, fim, ini);
       const del = db.prepare('DELETE FROM grifos WHERE id = ?');
-      const ins = db.prepare('INSERT INTO grifos (usuario_id, versao, livro, cap, verso, ini, fim, cor) VALUES (?,?,?,?,?,?,?,?)');
+      const ins = db.prepare('INSERT INTO grifos (usuario_id, versao, livro, cap, verso, ini, fim, cor, trecho) VALUES (?,?,?,?,?,?,?,?,?)');
+      // o app manda o texto inteiro do versículo/nota; guarda só o pedaço grifado
+      const texto = typeof b.texto === 'string' ? b.texto.slice(0, 20000) : '';
+      const pedaco = (a, z) => texto ? texto.slice(a, z).replace(/\s+/g, ' ').trim().slice(0, 300) || null : null;
       for (const g of sobre) {
         del.run(g.id);
         // Partes do grifo antigo que ficam fora do novo continuam com a cor antiga
         if (g.cor !== cor) {
-          if (g.ini < ini) ins.run(req.user.id, versao, livro, cap, verso, g.ini, ini, g.cor);
-          if (g.fim > fim) ins.run(req.user.id, versao, livro, cap, verso, fim, g.fim, g.cor);
+          if (g.ini < ini) ins.run(req.user.id, versao, livro, cap, verso, g.ini, ini, g.cor, pedaco(g.ini, ini));
+          if (g.fim > fim) ins.run(req.user.id, versao, livro, cap, verso, fim, g.fim, g.cor, pedaco(fim, g.fim));
         } else { ini = Math.min(ini, g.ini); fim = Math.max(fim, g.fim); }
       }
-      return ins.run(req.user.id, versao, livro, cap, verso, ini, fim, cor).lastInsertRowid;
+      return ins.run(req.user.id, versao, livro, cap, verso, ini, fim, cor, pedaco(ini, fim)).lastInsertRowid;
     })();
     res.json({ ok: true, id: r });
   }));
