@@ -537,16 +537,31 @@
     const prox = cap < livro[3] ? [livro, cap + 1] : idx < VB.LIVROS.length - 1 ? [VB.LIVROS[idx + 1], 1] : null;
     const navCap = `<nav class="leitor-nav" aria-label="Capítulos">
       ${ant ? `<a class="btn sec mini" href="${VB.rotaBiblia(...ant)}">← ${esc(ant[0][1])} ${ant[1]}</a>` : '<span></span>'}
-      <a class="btn sec mini" href="#/biblia">Livros</a>
       ${prox ? `<a class="btn sec mini" href="${VB.rotaBiblia(...prox)}">${esc(prox[0][1])} ${prox[1]} →</a>` : '<span></span>'}</nav>`;
+    const seta = '<svg class="lb-seta" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg>';
+    const icoGrifo = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M14.5 4.5l5 5L10 19H5v-5z"/></svg>';
+    // Barra compacta do leitor: livro/capítulo e versão abrem folhas; o texto fica livre para ler
     $('#conteudo').innerHTML = `<div class="leitor">
-      <div class="leitor-cab"><div><span class="migalha"><a href="#/biblia">Bíblia</a></span><h1>${esc(livro[0])} ${cap}</h1></div>${navCap}</div>
-      <div id="marcador" class="marcador-linha"></div>
-      ${chipsVersao()}
-      <div id="estudo-texto-sel" class="estudo-texto-sel" hidden></div>
+      <div class="leitor-barra" id="leitor-barra">
+        <button type="button" class="lb-ref" id="lb-ref" aria-haspopup="dialog" aria-label="Trocar livro ou capítulo"><h1>${esc(livro[0])} ${cap}</h1>${seta}</button>
+        <button type="button" class="lb-versao" id="lb-versao" aria-haspopup="dialog" aria-label="Trocar a versão"></button>
+        <span class="lb-esp"></span>
+        ${VB.me && VB.me.estudo ? `<button type="button" class="lb-ico" id="lb-grifos" aria-label="Meus grifos" title="Meus grifos">${icoGrifo}</button>` : ''}
+        <span id="marcador" class="lb-marc"></span>
+        ${ant ? `<a class="lb-ico" href="${VB.rotaBiblia(...ant)}" aria-label="Capítulo anterior: ${esc(ant[0][1])} ${ant[1]}" title="${esc(ant[0][1])} ${ant[1]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>` : ''}
+        ${prox ? `<a class="lb-ico" href="${VB.rotaBiblia(...prox)}" aria-label="Próximo capítulo: ${esc(prox[0][1])} ${prox[1]}" title="${esc(prox[0][1])} ${prox[1]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>` : ''}
+      </div>
       <div id="leitor-corpo" class="leitor-corpo"><div class="carregando"></div></div>
       ${navCap}
     </div>`;
+    const botaoVersao = () => {
+      const v = VB.versaoBiblia(); const est = VB.estudoPorCod(v);
+      $('#lb-versao').innerHTML = `${est && VB.capaMini ? VB.capaMini(est) : ''}<b>${esc(nomeVersao(v) || v)}</b>${seta}`;
+      $('#lb-versao').classList.toggle('estudo', !!est);
+    };
+    botaoVersao();
+    $('#lb-ref').addEventListener('click', () => VB.folhaLivros({ livro, cap }));
+    $('#lb-grifos') && $('#lb-grifos').addEventListener('click', () => VB.folhaGrifos());
     const desenhar = async () => {
       const v = VB.versaoBiblia(); const corpo = $('#leitor-corpo');
       // Bíblia de estudo: as notas são dela, e o texto bíblico pode ser qualquer versão instalada
@@ -554,18 +569,6 @@
       const internas = VB.VERSOES.filter(x => x[3]);
       let tv = v;
       if (est) { tv = VB.pref.get(`estudo_texto_${v}`, est.base); if (!internas.some(x => x[0] === tv)) tv = est.base || (internas[0] || [])[0]; }
-      const sel = $('#estudo-texto-sel');
-      sel.hidden = !est;
-      if (est) {
-        sel.innerHTML = `<label><span>Texto bíblico da ${esc(est.sigla)}</span>
-          <select class="input">${internas.map(x => `<option value="${esc(x[0])}"${x[0] === tv ? ' selected' : ''}>${esc(x[1])} — ${esc(x[2])}</option>`).join('')}</select></label>`;
-        sel.querySelector('select').addEventListener('change', e => {
-          VB.pref.set(`estudo_texto_${v}`, e.target.value);
-          const chip = document.querySelector(`.versao[data-versao="${v}"] span`);
-          if (chip) chip.textContent = `${est.titulo} · texto ${(VB.VERSOES.find(x => x[0] === e.target.value) || [])[1] || ''}`;
-          desenhar();
-        });
-      }
       if (VB.versaoInterna(v)) {
         corpo.innerHTML = '<div class="carregando"></div>';
         const c = VB.pref.get('comparar', '');
@@ -577,11 +580,16 @@
         if (VB.versaoBiblia() !== v) return;   // trocou de versão enquanto carregava
         corpo.innerHTML = `<div class="leitura biblia-texto${comp ? ' com-comparacao' : ''}" data-ctx-livro="${idx}" data-ctx-cap="${cap}" data-ctx-versao="${esc(tv)}">${VB.htmlVersos(d, { destaque: verso, comp, acoes: true })}</div>
           <p class="pequeno muted biblia-credito">${esc(d.versao)} — ${esc(d.licenca)}${comp ? `<br>${esc(comp.versao)} — ${esc(comp.licenca)}` : ''}</p>`;
-        if (verso) { const alvo = $(`#v${verso}`); if (alvo) setTimeout(() => alvo.scrollIntoView({ block: 'center' }), 50); }
         if (VB.COMENTARIOS.length) VB.api(`/api/comentarios/${idx}/${cap}/marcas`).then(vs => vs.forEach(n => {
           const b = corpo.querySelector(`.acao-verso[data-acao-v="${n}"]`); if (b) { b.classList.add('tem-com'); b.title = 'Tem comentário'; }
         })).catch(() => {});
-        if (VB.me && VB.me.estudo && VB.estudoLeitor) VB.estudoLeitor(corpo, { livro: idx, cap, versao: tv, estudo: est });
+        // notas da Bíblia de estudo entram antes de mostrar o texto, para a página não "pular" enquanto se lê
+        if (VB.me && VB.me.estudo && VB.estudoLeitor) {
+          if (est) corpo.classList.add('montando');
+          try { await VB.estudoLeitor(corpo, { livro: idx, cap, versao: tv, estudo: est }); } catch { /* segue sem notas */ }
+          corpo.classList.remove('montando');
+        }
+        if (verso) { const alvo = $(`#v${verso}`); if (alvo) setTimeout(() => alvo.scrollIntoView({ block: 'center' }), 30); }
         return;
       }
       const url = urlExterna(livro, cap);
@@ -597,16 +605,20 @@
           <p class="muted">O site que publica essa versão não permite ser aberto dentro de outros apps. Você pode lê-la no site ou ler este capítulo na Almeida aqui no app.</p>
           <div class="acoes"><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">${icone.externo}Ler a ${esc(nomeVersao(v))} no site</a>
           <button class="btn sec" type="button" id="ler-alm">Ler na ARA aqui</button></div></div>`;
-        $('#ler-alm').addEventListener('click', () => { VB.pref.set('versao', 'ara'); $$('.versao').forEach(x => x.setAttribute('aria-checked', String(x.dataset.versao === 'ara'))); desenhar(); });
+        $('#ler-alm').addEventListener('click', () => { VB.pref.set('versao', 'ara'); botaoVersao(); desenhar(); });
       }
     };
-    const marcador = VB.botaoMarcador ? VB.botaoMarcador($('#marcador'), { livro: idx, cap }) : null;
-    ligarChips(() => {
-      // trocou de versão: se ela tem marcador em outro capítulo, vai para lá
-      if (VB.irParaMarcador && VB.irParaMarcador(VB.versaoBiblia(), { livro: idx, cap })) return;
-      if (marcador) marcador();
-      desenhar();
-    });
+    const marcador = VB.botaoMarcador ? VB.botaoMarcador($('#marcador'), { livro: idx, cap, compacto: true }) : null;
+    $('#lb-versao').addEventListener('click', () => VB.folhaVersoes({
+      aoTrocar: () => {
+        botaoVersao();
+        // trocou de versão: se ela tem marcador em outro capítulo, vai para lá
+        if (VB.irParaMarcador && VB.irParaMarcador(VB.versaoBiblia(), { livro: idx, cap })) return;
+        if (marcador) marcador();
+        desenhar();
+      },
+      aoTrocarTexto: () => { botaoVersao(); desenhar(); },
+    }));
     desenhar();
   });
 

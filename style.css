@@ -1007,3 +1007,105 @@ html[data-tema="noite"] .outra-bloco .nota-estudo { background: #24261C; }
 .linha-estudo-cab { display: flex; gap: 12px; align-items: flex-start; }
 .capa-prof { flex: none; width: 54px; height: 78px; border-radius: 2px 5px 5px 2px; overflow: hidden; background: #4A321F; color: #E7C98A; display: grid; place-items: center; font: 700 .7rem var(--sans); box-shadow: 0 4px 10px -4px rgba(0,0,0,.4); }
 .capa-prof img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ───────── Leitor: barra compacta, folhas e leitura em tela cheia */
+.leitor { max-width: 1040px; overflow-x: clip; }
+.leitor .leitura.biblia-texto { max-width: none; }
+.leitor .leitor-corpo { margin-top: .6rem; touch-action: pan-y pinch-zoom; }
+.leitor-corpo.montando { opacity: 0; min-height: 70vh; }
+.leitor-corpo { transition: opacity .15s ease-out; }
+.leitor .estudo-texto, .leitor .leitura { overflow-wrap: anywhere; }
+.leitor .nota-estudo img, .leitor .estudo-bloco img { max-width: 100%; height: auto; }
+.leitor-barra {
+  position: sticky; top: var(--topo); z-index: 25; display: flex; align-items: center; gap: 6px;
+  margin: -12px 0 0; padding: 8px 0; background: color-mix(in srgb, var(--fundo, #F1F0EA) 94%, transparent);
+  backdrop-filter: blur(8px); border-bottom: 1px solid var(--linha-2);
+}
+.lb-ref, .lb-versao { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--linha); background: var(--papel); color: var(--tinta); border-radius: 999px; cursor: pointer; min-height: 40px; }
+.lb-ref { padding: 4px 10px 4px 14px; }
+.lb-ref h1 { font: 600 1.15rem var(--serif); margin: 0; white-space: nowrap; }
+.lb-versao { padding: 4px 10px 4px 12px; font: 600 .9rem var(--sans); max-width: 40vw; }
+.lb-versao b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lb-versao .capa-mini { width: 20px; height: 28px; border-radius: 3px; object-fit: cover; margin-left: -4px; }
+.lb-versao.estudo { border-color: color-mix(in srgb, var(--ouro) 60%, var(--linha)); background: var(--ouro-claro); color: #6E5220; }
+.lb-seta { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; flex: none; opacity: .7; }
+.lb-esp { flex: 1; }
+.lb-marc { display: contents; }
+.lb-ico { width: 40px; height: 40px; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid transparent; background: none; color: var(--suave); cursor: pointer; flex: none; text-decoration: none; }
+.lb-ico:hover { background: var(--linha-2); color: var(--tinta); }
+.lb-ico svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lb-ico.btn-marcador.ativo { background: var(--ouro-claro); border-color: var(--ouro); color: #7A5A22; }
+.lb-ico.btn-marcador.ativo svg { fill: currentColor; }
+@media (max-width: 720px) {
+  .leitor-barra { margin: -10px 0 0; padding: 6px 0; gap: 4px; }
+  .lb-ref h1 { font-size: 1.05rem; }
+  .lb-ico { width: 36px; height: 36px; }
+  .leitor-barra a.lb-ico { display: none; }   /* no celular, anterior/próximo ficam no fim do capítulo */
+}
+
+/* folha: sobe de baixo no celular */
+.modal.folha .modal-corpo { padding-bottom: 22px; }
+@media (max-width: 720px) {
+  .modal-fundo.folha-fundo { place-items: end stretch; padding: 0; }
+  .modal.folha { max-width: none; border-radius: 20px 20px 0 0; max-height: 86vh; animation: sobe .18s ease-out; padding-bottom: env(safe-area-inset-bottom); }
+}
+@keyframes sobe { from { transform: translateY(40px); opacity: .4; } to { transform: none; opacity: 1; } }
+.fv-tit { font: 700 .78rem var(--sans); letter-spacing: .02em; color: var(--suave); margin: 1rem 0 .5rem; }
+.fv-tit:first-child { margin-top: 0; }
+.fv-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px; }
+.fv-item { display: flex; align-items: center; gap: 10px; text-align: left; border: 1.5px solid var(--linha); background: var(--papel); color: var(--tinta); border-radius: var(--r-md); padding: 9px 12px; cursor: pointer; min-height: 52px; }
+.fv-item > b { font: 600 1.1rem var(--serif); min-width: 3.2em; }
+.fv-item span { font-size: .8rem; color: var(--suave); line-height: 1.25; }
+.fv-item .fv-tx { display: grid; gap: 1px; }
+.fv-item .fv-tx b { font: 600 1rem var(--serif); color: var(--ouro); }
+.fv-item .capa-mini { width: 30px; height: 42px; border-radius: 4px; object-fit: cover; flex: none; }
+.fv-item.atual { border-color: var(--vinho-2); background: var(--vinho-claro); }
+.fv-item.fv-estudo.atual { border-color: var(--ouro); background: var(--ouro-claro); }
+.fv-texto { display: grid; gap: .35rem; font: 600 .85rem var(--sans); color: var(--suave); margin-bottom: .4rem; padding: 10px 12px; border-radius: var(--r-md); background: var(--ouro-claro); }
+.livro-btn.atual, .cap-grade a.atual { background: var(--vinho); color: #F5EEE4; border-color: var(--vinho); }
+
+/* seleção de versículos por toque e barra de grifo */
+.grifavel p[id^="v"] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.grifavel p.v-sel { text-decoration: underline dotted var(--vinho-2); text-decoration-thickness: 2px; text-underline-offset: 5px; }
+.barra-versos {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: 18px; z-index: 60; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: center;
+  background: var(--papel); border: 1px solid var(--linha); border-radius: 18px; padding: 10px 14px; box-shadow: 0 14px 40px -12px rgba(0,0,0,.35);
+  max-width: calc(100vw - 20px); animation: sobe .15s ease-out;
+}
+.bv-ref { font: 700 .88rem var(--sans); color: var(--vinho); }
+.bv-cores { display: flex; gap: 8px; }
+.bv-cores button { width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(0,0,0,.08); cursor: pointer; }
+.bv-acao { border: 1px solid var(--linha); background: none; border-radius: 99px; padding: .4rem .8rem; font: 600 .82rem var(--sans); color: var(--tinta); cursor: pointer; }
+.bv-fechar { width: 34px; height: 34px; padding: 0; display: grid; place-items: center; }
+.bv-fechar svg { width: 16px; height: 16px; }
+@media (max-width: 720px) { .barra-versos { bottom: calc(70px + env(safe-area-inset-bottom)); } }
+.bv-cores .g-amarelo, .fg-cor.g-amarelo { background: #F6E27A; }
+.bv-cores .g-verde, .fg-cor.g-verde { background: #A9DDA0; }
+.bv-cores .g-azul, .fg-cor.g-azul { background: #A8D2F0; }
+.bv-cores .g-rosa, .fg-cor.g-rosa { background: #F3B5CF; }
+.bv-cores .g-laranja, .fg-cor.g-laranja { background: #F7C08A; }
+
+/* lista "Meus grifos" */
+.fg-filtro { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: .6rem; }
+.fg-filtro button { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--linha); background: var(--papel); border-radius: 99px; padding: .35rem .75rem; font: 600 .82rem var(--sans); cursor: pointer; color: var(--tinta); }
+.fg-filtro button[aria-pressed="true"] { background: var(--vinho); color: #F5EEE4; border-color: var(--vinho); }
+.fg-livro { font: 600 1.05rem var(--serif); color: var(--vinho); margin: 1rem 0 .3rem; }
+.fg-lista { display: grid; }
+.fg-item { display: flex; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--linha-2); text-decoration: none; color: var(--tinta); }
+.fg-item:hover { background: var(--linha-2); }
+.fg-cor { width: 12px; height: 12px; border-radius: 50%; flex: none; margin-top: 5px; display: inline-block; }
+.fg-filtro .fg-cor { margin: 0; }
+.fg-tx { display: grid; gap: 2px; min-width: 0; }
+.fg-tx b { font-size: .92rem; }
+.fg-tx small { color: var(--suave); font-size: .75rem; }
+.fg-trecho { font-family: var(--serif); font-size: 1rem; line-height: 1.45; color: var(--tinta); }
+.marcadores-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.marcadores-cab h3 { margin: 0; }
+.marcadores-cab .btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* topo não pode empurrar a página para o lado (tablet com muitos links) */
+html, body { overflow-x: clip; }
+.topo-in { min-width: 0; }
+.nav { min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.nav::-webkit-scrollbar { display: none; }
+.nav a { white-space: nowrap; }
+@media (max-width: 1060px) { .topo .usuario-chip .nome { display: none; } }

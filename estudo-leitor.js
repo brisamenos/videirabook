@@ -138,6 +138,40 @@
       });
     });
 
+    // Toque em versículos → seleciona um ou vários (em sequência ou não) e grifa todos de uma vez
+    const selecionados = new Set();
+    let barraV = null;
+    const fecharBarraV = () => { selecionados.clear(); texto.querySelectorAll('p.v-sel').forEach(p => p.classList.remove('v-sel')); if (barraV) { barraV.remove(); barraV = null; } };
+    const desenharBarraV = () => {
+      if (!selecionados.size) { fecharBarraV(); return; }
+      const vs = [...selecionados].sort((a, b) => a - b);
+      const tem = grifos.some(g => selecionados.has(g.verso));
+      if (!barraV) { barraV = document.createElement('div'); barraV.className = 'barra-versos'; barraV.setAttribute('role', 'toolbar'); document.body.appendChild(barraV); }
+      const faixa = vs.length === 1 ? `${vs[0]}` : (vs[vs.length - 1] - vs[0] === vs.length - 1 ? `${vs[0]}-${vs[vs.length - 1]}` : vs.join(', '));
+      barraV.innerHTML = `<span class="bv-ref">${esc(VB.LIVROS[livro][1])} ${cap}.${faixa}</span>
+        <span class="bv-cores">${CORES.map(([c, n]) => `<button type="button" class="g-${c}" data-cor="${c}" aria-label="Grifar de ${n.toLowerCase()}" title="${n}"></button>`).join('')}</span>
+        ${tem ? '<button type="button" class="bv-acao" data-tirar>Tirar grifo</button>' : ''}
+        <button type="button" class="bv-acao bv-fechar" data-fechar-sel aria-label="Cancelar">${VB.icone.fechar}</button>`;
+      barraV.onclick = async e => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.cor) {
+          const trechos = vs.map(v => { const p = texto.querySelector(`p#v${v}`); const t = p ? textoDe(p) : ''; const ini = t.length - t.trimStart().length; return { verso: v, ini, fim: t.trimEnd().length }; }).filter(t => t.fim > t.ini);
+          fecharBarraV(); await salvar(trechos, b.dataset.cor);
+        } else if (b.hasAttribute('data-tirar')) {
+          const ids = grifos.filter(g => vs.includes(g.verso)).map(g => g.id); fecharBarraV(); await tirar(ids);
+        } else fecharBarraV();
+      };
+    };
+    texto.addEventListener('click', e => {
+      if (e.target.closest('button, a, mark.grifo, sup, .nota-estudo, .estudo-bloco, input, select')) return;
+      const sel = getSelection(); if (sel && !sel.isCollapsed) return;
+      const p = e.target.closest('p[id^="v"]'); if (!p || !texto.contains(p)) return;
+      const v = Number(p.id.slice(1));
+      if (selecionados.has(v)) { selecionados.delete(v); p.classList.remove('v-sel'); } else { selecionados.add(v); p.classList.add('v-sel'); }
+      fecharBarra(); desenharBarraV();
+    });
+    addEventListener('hashchange', fecharBarraV, { once: true });
+
     await Promise.all([carregarGrifos(), estudo ? montarNotas(corpo, texto, estudo, { livro, cap }) : null]);
     VB.outrasNotas(texto, { livro, cap, atual: estudo ? estudo.cod : '' });
   };
@@ -209,6 +243,100 @@
 (function () {
   const { esc } = VB;
   const ICONE_FITA = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v18l-5-4-5 4z"/></svg>';
+  const ICONE_GRIFO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M14.5 4.5l5 5L10 19H5v-5z"/></svg>';
+
+  // Texto bíblico que uma versão mostra (Bíblia de estudo -> a versão escolhida para o texto)
+  VB.textoDaVersao = function (v) {
+    const est = VB.estudoPorCod(v); if (!est) return v;
+    const internas = VB.VERSOES.filter(x => x[3]);
+    let tv = VB.pref.get(`estudo_texto_${v}`, est.base);
+    if (!internas.some(x => x[0] === tv)) tv = est.base || (internas[0] || [])[0];
+    return tv;
+  };
+
+  // Folha (painel que sobe de baixo no celular; janela no tablet/computador)
+  function folha(titulo, corpo, aoAbrir) {
+    const m = VB.modal({ titulo, corpo, largo: true, aoAbrir });
+    m.el.classList.add('folha-fundo'); m.el.querySelector('.modal').classList.add('folha');
+    return m;
+  }
+
+  // ── Versões: escolher sem ocupar a tela de leitura
+  VB.folhaVersoes = function ({ aoTrocar, aoTrocarTexto } = {}) {
+    const atual = VB.versaoBiblia();
+    const internas = VB.VERSOES.filter(x => x[3]);
+    const linhaV = v => `<button type="button" class="fv-item${v[0] === atual ? ' atual' : ''}" data-versao="${esc(v[0])}" aria-pressed="${v[0] === atual}"><b>${esc(v[1])}</b><span>${esc(v[2])}${v[3] ? '' : ' · abre no site'}</span></button>`;
+    const linhaE = e => `<button type="button" class="fv-item fv-estudo${e.cod === atual ? ' atual' : ''}" data-versao="${esc(e.cod)}" aria-pressed="${e.cod === atual}">${VB.capaMini(e)}<span class="fv-tx"><b>${esc(e.sigla)}</b><span>${esc(e.titulo)}</span></span></button>`;
+    const estAtual = VB.estudoPorCod(atual);
+    const corpo = `${estAtual ? `<label class="fv-texto"><span>Texto bíblico da ${esc(estAtual.sigla)}</span>
+        <select class="input" id="fv-texto">${internas.map(x => `<option value="${esc(x[0])}"${x[0] === VB.textoDaVersao(atual) ? ' selected' : ''}>${esc(x[1])} — ${esc(x[2])}</option>`).join('')}</select></label>` : ''}
+      ${VB.ESTUDOS && VB.ESTUDOS.length ? `<h4 class="fv-tit">Bíblias de estudo</h4><div class="fv-lista">${VB.ESTUDOS.map(linhaE).join('')}</div>` : ''}
+      <h4 class="fv-tit">Versões</h4><div class="fv-lista">${VB.VERSOES.map(linhaV).join('')}</div>`;
+    folha('Versão', corpo, (el, fechar) => {
+      el.querySelectorAll('[data-versao]').forEach(b => b.addEventListener('click', () => {
+        if (b.dataset.versao !== atual) { VB.pref.set('versao', b.dataset.versao); fechar(); aoTrocar && aoTrocar(); }
+        else fechar();
+      }));
+      el.querySelector('#fv-texto')?.addEventListener('change', e => { VB.pref.set(`estudo_texto_${atual}`, e.target.value); fechar(); aoTrocarTexto && aoTrocarTexto(); });
+    });
+  };
+
+  // ── Livro e capítulo: escolhe ali mesmo, sem voltar para a página da Bíblia
+  VB.folhaLivros = function ({ livro, cap } = {}) {
+    let test = livro && VB.LIVROS.indexOf(livro) >= 39 ? 'nt' : 'at';
+    folha('Livro e capítulo', `<div class="abas-testamento" role="tablist">
+        <button type="button" role="tab" data-test="at">Antigo Testamento</button><button type="button" role="tab" data-test="nt">Novo Testamento</button></div>
+      <div id="fl-area"></div>`, (el, fechar) => {
+      const area = el.querySelector('#fl-area');
+      const livros = () => {
+        el.querySelectorAll('[data-test]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.test === test)));
+        const lista = test === 'at' ? VB.LIVROS.slice(0, 39) : VB.LIVROS.slice(39);
+        area.innerHTML = `<div class="livros">${lista.map(l => `<button type="button" class="livro-btn${l === livro ? ' atual' : ''}" data-l="${VB.LIVROS.indexOf(l)}">${esc(l[0])}</button>`).join('')}</div>`;
+        area.querySelectorAll('[data-l]').forEach(b => b.addEventListener('click', () => caps(VB.LIVROS[Number(b.dataset.l)])));
+      };
+      const caps = l => {
+        if (l[3] === 1) { fechar(); location.hash = VB.rotaBiblia(l, 1); return; }
+        area.innerHTML = `<div class="cap-cab"><button type="button" class="btn sec mini" id="fl-voltar">← Livros</button><h3>${esc(l[0])}</h3></div>
+          <div class="cap-grade">${Array.from({ length: l[3] }, (_, i) => `<a href="${VB.rotaBiblia(l, i + 1)}"${l === livro && i + 1 === cap ? ' class="atual"' : ''}>${i + 1}</a>`).join('')}</div>`;
+        area.querySelector('#fl-voltar').addEventListener('click', livros);
+        area.querySelectorAll('.cap-grade a').forEach(a => a.addEventListener('click', fechar));
+      };
+      el.querySelectorAll('[data-test]').forEach(b => b.addEventListener('click', () => { test = b.dataset.test; livros(); }));
+      livro ? caps(livro) : livros();
+    });
+  };
+
+  // ── Meus grifos: todos, na ordem da Bíblia
+  VB.folhaGrifos = async function () {
+    const m = folha('Meus grifos', '<div class="carregando"></div>');
+    let lista;
+    try { lista = await VB.api('/api/grifos'); } catch (e) { m.el.querySelector('.modal-corpo').innerHTML = `<p class="erro-msg">${esc(e.message)}</p>`; return; }
+    const corpo = m.el.querySelector('.modal-corpo');
+    if (!lista.length) { corpo.innerHTML = '<p class="muted">Você ainda não grifou nada. No leitor, toque em um ou mais versículos (ou selecione um trecho) e escolha a cor.</p>'; return; }
+    const CORES = ['amarelo', 'verde', 'azul', 'rosa', 'laranja'];
+    let filtro = '';
+    const desenhar = () => {
+      const vis = lista.filter(g => !filtro || g.cor === filtro);
+      let livroAnt = -1, html = '';
+      for (const g of vis) {
+        if (g.livro !== livroAnt) { html += `<h4 class="fg-livro">${esc(VB.LIVROS[g.livro][0])}</h4>`; livroAnt = g.livro; }
+        html += `<a class="fg-item" href="${VB.rotaBiblia(VB.LIVROS[g.livro], g.cap, g.verso)}" data-versao="${esc(g.versao)}">
+          <span class="fg-cor g-${esc(g.cor)}"></span><span class="fg-tx"><b>${esc(VB.LIVROS[g.livro][1])} ${g.cap}.${g.verso}</b><small>${esc(nomeVersao(g.versao))}</small>
+          ${g.trecho ? `<span class="fg-trecho">${esc(g.trecho)}</span>` : ''}</span></a>`;
+      }
+      corpo.innerHTML = `<div class="fg-filtro" role="group" aria-label="Filtrar por cor"><button type="button" data-cor="" aria-pressed="${!filtro}">Todos (${lista.length})</button>
+        ${CORES.filter(c => lista.some(g => g.cor === c)).map(c => `<button type="button" data-cor="${c}" aria-pressed="${filtro === c}"><span class="fg-cor g-${c}"></span>${lista.filter(g => g.cor === c).length}</button>`).join('')}</div>
+        <div class="fg-lista">${html}</div>`;
+      corpo.querySelectorAll('[data-cor]').forEach(b => b.addEventListener('click', () => { filtro = b.dataset.cor; desenhar(); }));
+      corpo.querySelectorAll('.fg-item').forEach(a => a.addEventListener('click', () => {
+        // abre na versão em que o grifo foi feito, se a versão atual mostrar outro texto
+        if (VB.textoDaVersao(VB.versaoBiblia()) !== a.dataset.versao) VB.pref.set('versao', a.dataset.versao);
+        m.fechar();
+        if (location.hash === a.getAttribute('href')) setTimeout(() => VB.rota(), 0);
+      }));
+    };
+    desenhar();
+  };
 
   // ── Marcadores (um por versão)
   VB.MARC = null;
@@ -228,12 +356,14 @@
     VB.toast(`Marcador da ${nomeVersao(versao)}: ${refMarc(m)}`);
     return true;
   };
-  // Botão do leitor
-  VB.botaoMarcador = function (alvo, { livro, cap }) {
+  // Botão do leitor (compacto: só o ícone, na barra do leitor)
+  VB.botaoMarcador = function (alvo, { livro, cap, compacto }) {
     const desenhar = () => {
       const v = VB.versaoBiblia(); const m = (VB.MARC || {})[v];
       const aqui = m && m.livro === livro && m.cap === cap;
-      alvo.innerHTML = `<button type="button" class="btn sec mini btn-marcador${aqui ? ' ativo' : ''}" aria-pressed="${!!aqui}" title="${aqui ? 'Tirar o marcador' : 'Marcar onde parei nesta versão'}">${ICONE_FITA}${aqui ? 'Marcado' : 'Marcar aqui'}</button>
+      alvo.innerHTML = compacto
+        ? `<button type="button" class="lb-ico btn-marcador${aqui ? ' ativo' : ''}" aria-pressed="${!!aqui}" aria-label="${aqui ? 'Tirar o marcador' : 'Marcar onde parei nesta versão'}" title="${aqui ? 'Marcado aqui (tocar tira)' : 'Marcar onde parei'}">${ICONE_FITA}</button>`
+        : `<button type="button" class="btn sec mini btn-marcador${aqui ? ' ativo' : ''}" aria-pressed="${!!aqui}" title="${aqui ? 'Tirar o marcador' : 'Marcar onde parei nesta versão'}">${ICONE_FITA}${aqui ? 'Marcado' : 'Marcar aqui'}</button>
         ${m && !aqui ? `<a class="marcador-ir" href="${VB.rotaBiblia(VB.LIVROS[m.livro], m.cap, m.verso > 1 ? m.verso : 0)}">Seu marcador na ${esc(nomeVersao(v))}: ${esc(refMarc(m))}</a>` : ''}`;
       alvo.querySelector('button').addEventListener('click', async () => {
         try {
@@ -259,10 +389,15 @@
     if (!el) return;
     const M = await VB.carregarMarcadores(true);
     const lista = Object.values(M).filter(m => VB.LIVROS[m.livro] && (VB.versaoInterna(m.versao)));
-    if (!lista.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<section class="painel marcadores"><h3>${ICONE_FITA}Seus marcadores</h3><div class="marcadores-lista">${lista.map(m =>
-      `<a href="${VB.rotaBiblia(VB.LIVROS[m.livro], m.cap, m.verso > 1 ? m.verso : 0)}" data-versao="${esc(m.versao)}"><b>${esc(nomeVersao(m.versao))}</b><span>${esc(refMarc(m))}</span></a>`).join('')}</div></section>`;
+    const grifos = VB.me && VB.me.estudo;
+    if (!lista.length && !grifos) { el.innerHTML = ''; return; }
+    el.innerHTML = `<section class="painel marcadores"><div class="marcadores-cab"><h3>${ICONE_FITA}Seus marcadores</h3>
+      ${grifos ? `<button type="button" class="btn sec mini" id="abrir-grifos">${ICONE_GRIFO}Meus grifos</button>` : ''}</div>
+      ${lista.length ? `<div class="marcadores-lista">${lista.map(m =>
+      `<a href="${VB.rotaBiblia(VB.LIVROS[m.livro], m.cap, m.verso > 1 ? m.verso : 0)}" data-versao="${esc(m.versao)}"><b>${esc(nomeVersao(m.versao))}</b><span>${esc(refMarc(m))}</span></a>`).join('')}</div>`
+      : '<p class="pequeno muted" style="margin:.4rem 0 0">No leitor, toque na fita para marcar onde parou em cada versão.</p>'}</section>`;
     el.querySelectorAll('a[data-versao]').forEach(a => a.addEventListener('click', () => VB.pref.set('versao', a.dataset.versao)));
+    el.querySelector('#abrir-grifos')?.addEventListener('click', () => VB.folhaGrifos());
   };
 
   // ── Prateleira

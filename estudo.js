@@ -69,7 +69,16 @@ module.exports = function (app, P, auth, h, upload) {
   }));
   // Todos os meus grifos (lista)
   app.get('/api/grifos', auth, so, h((req, res) => {
-    res.json(db.prepare('SELECT id, versao, livro, cap, verso, ini, fim, cor, criado_em FROM grifos WHERE usuario_id = ? ORDER BY livro, cap, verso, ini LIMIT 5000').all(req.user.id));
+    const lista = db.prepare('SELECT id, versao, livro, cap, verso, ini, fim, cor, criado_em FROM grifos WHERE usuario_id = ? ORDER BY livro, cap, verso, ini LIMIT 5000').all(req.user.id);
+    // trecho grifado (texto simples do versículo, cortado nas posições do grifo)
+    const caps = new Map();
+    for (const g of lista) {
+      const k = `${g.versao}|${g.livro}|${g.cap}`;
+      if (!caps.has(k)) { try { const t = BIB.trecho(g.versao, g.livro, g.cap); caps.set(k, t ? new Map(t.linhas) : null); } catch { caps.set(k, null); } }
+      const m = caps.get(k); const v = m && m.get(g.verso);
+      if (v) { const s = v.slice(g.ini, g.fim).trim(); g.trecho = (s.length > 220 ? `${s.slice(0, 220)}…` : s) || v.slice(0, 160); }
+    }
+    res.json(lista);
   }));
   // Marcar um trecho. Trechos que se sobrepõem no mesmo versículo são juntados com a nova cor.
   app.post('/api/grifos', auth, so, h((req, res) => {
