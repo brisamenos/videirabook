@@ -551,6 +551,7 @@
         ${ant ? `<a class="lb-ico" href="${VB.rotaBiblia(...ant)}" aria-label="Capítulo anterior: ${esc(ant[0][1])} ${ant[1]}" title="${esc(ant[0][1])} ${ant[1]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></a>` : ''}
         ${prox ? `<a class="lb-ico" href="${VB.rotaBiblia(...prox)}" aria-label="Próximo capítulo: ${esc(prox[0][1])} ${prox[1]}" title="${esc(prox[0][1])} ${prox[1]}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></a>` : ''}
       </div>
+      ${VB.botoes3D ? VB.botoes3D(idx, cap) : ''}
       <div id="leitor-corpo" class="leitor-corpo"><div class="carregando"></div></div>
       ${navCap}
     </div>`;

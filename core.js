@@ -727,7 +727,7 @@ window.VB = (function () {
   // botões "Ver em 3D" do capítulo
   VB.botoes3D = function (livro, cap) {
     const l = VB.ILUSTRACOES[`${livro}:${cap}`]; if (!l) return '';
-    const ico = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>';
+    const ico = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>';
     return `<div class="leitor-3d" role="group" aria-label="Ilustrações em 3D deste capítulo"><span>${ico}Ver em 3D</span>${l.map(([m, p, r]) => `<button type="button" class="chip-3d" data-m3d="${m}" data-p3d="${p}">${esc(r)}</button>`).join('')}</div>`;
   };
   document.addEventListener('click', e => { const b = e.target.closest('[data-m3d]'); if (b) { e.preventDefault(); VB.abrir3D(b.dataset.m3d, b.dataset.p3d); } });
