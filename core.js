@@ -713,6 +713,33 @@ window.VB = (function () {
     '58:5': [VI('azeite', 'O azeite')], '65:14': [VI('lagar', 'O lagar')],
   };
   Object.entries(MAIS).forEach(([k, l]) => { VB.ILUSTRACOES[k] = (VB.ILUSTRACOES[k] || []).concat(l); });
+  // terceira leva: templo de Herodes, acampamento, Jericó, Babilônia, casa, Qumran, navio de Paulo, Atenas e Egito
+  const HE = mk('herodes'), AC = mk('acampamento'), JE = mk('jerico'), BA = mk('babilonia'), CS = mk('casa'), QU = mk('qumran'), NA = mk('navio'), AT = mk('atenas'), EG = mk('egito');
+  const MAIS3 = {
+    '0:12': [EG('piramides', 'As pirâmides')], '0:41': [EG('nilo', 'O Nilo'), EG('celeiros', 'Os celeiros de José')], '0:42': [EG('celeiros', 'Os celeiros')], '0:46': [EG('geral', 'Israel no Egito')], '0:47': [EG('geral', 'Israel no Egito')],
+    '1:1': [EG('tijolos', 'Tijolos com palha'), EG('cidade', 'Pitom e Ramessés'), EG('merneptah', 'Estela de Merneptá')], '1:2': [EG('moises', 'O cesto de Moisés')], '1:5': [EG('tijolos', 'Tijolos sem palha')], '1:7': [EG('nilo', 'O Nilo')],
+    '1:13': [AC('nuvem', 'A coluna de nuvem e de fogo')], '1:40': [AC('nuvem', 'A nuvem sobre a tenda')],
+    '3:2': [AC('geral', 'O acampamento das tribos'), AC('juda', 'Leste: Judá'), AC('ruben', 'Sul: Rúben'), AC('efraim', 'Oeste: Efraim'), AC('da', 'Norte: Dã')], '3:3': [AC('sacerdotes', 'Moisés e Arão'), AC('levitas', 'Os levitas')],
+    '3:9': [AC('nuvem', 'Nuvem e fogo')], '3:10': [AC('juda', 'A ordem de partida')],
+    '4:6': [CS('geral', 'A casa israelita')], '4:22': [CS('telhado', 'O parapeito')], '4:34': [JE('palmeiras', 'Jericó, cidade das palmeiras')],
+    '5:2': [JE('raabe', 'A casa de Raabe'), JE('muralhas', 'A muralha dupla'), CS('telhado', 'O linho no telhado')], '5:6': [JE('geral', 'Jericó'), JE('cerco', 'As sete voltas'), JE('queda', 'O muro caiu')],
+    '8:28': [CS('estabulo', 'Animais dentro de casa')], '11:2': [JE('fonte', 'A fonte de Eliseu')], '11:4': [CS('andar', 'O quarto de Eliseu')], '11:24': [BA('geral', 'Babilônia')], '11:25': [BA('geral', 'Babilônia')],
+    '18:119': [QU('caverna4', 'Os manuscritos de Qumran')], '18:137': [BA('eufrates', 'Junto aos rios da Babilônia')], '19:31': [CS('patio', 'O pátio da casa')],
+    '22:40': [QU('geral', 'Qumran e o rolo de Isaías')], '22:46': [BA('procissao', 'A Rua das Procissões')], '22:47': [BA('geral', 'Babilônia')], '23:32': [QU('caverna1', 'Documentos num jarro')],
+    '23:50': [BA('geral', 'Babilônia'), BA('ishtar', 'Portão de Ishtar')], '23:51': [BA('geral', 'Babilônia'), BA('ishtar', 'Portão de Ishtar')], '25:47': [QU('mar', 'O mar Morto')],
+    '26:1': [BA('geral', 'Babilônia')], '26:3': [BA('ishtar', 'Portão de Ishtar')], '26:4': [BA('palacio', 'O palácio'), BA('jardins', 'Os jardins')], '26:5': [BA('palacio', 'O banquete de Belsazar'), BA('eufrates', 'A queda da Babilônia')],
+    '39:1': [JE('raabe', 'Raabe')], '39:3': [QU('povoado', 'O deserto da Judeia')], '39:4': [HE('pinaculo', 'O pináculo do templo')], '39:5': [CS('geral', 'A lamparina na casa')], '39:21': [HE('gentios', 'O pátio dos gentios')],
+    '39:24': [HE('geral', 'O templo de Herodes'), CS('patio', 'Duas mulheres moendo')], '39:27': [HE('veu', 'O véu rasgado')],
+    '40:11': [HE('gentios', 'O pátio dos gentios')], '40:12': [HE('mulheres', 'A oferta da viúva')], '40:13': [HE('geral', 'O templo de Herodes')], '40:15': [HE('veu', 'O véu rasgado')],
+    '41:1': [HE('santuario', 'Zacarias no santuário')], '41:2': [CS('estabulo', 'A manjedoura'), HE('nicanor', 'A apresentação no templo')], '41:3': [QU('povoado', 'O deserto da Judeia')], '41:4': [HE('pinaculo', 'O pináculo do templo')],
+    '41:11': [CS('andar', 'Já estamos deitados')], '41:12': [CS('deposito', 'O depósito')], '41:19': [JE('palmeiras', 'Jericó')], '41:21': [HE('mulheres', 'A oferta da viúva'), HE('geral', 'O templo')], '41:23': [HE('veu', 'O véu rasgado')],
+    '42:2': [HE('gentios', 'O pátio dos gentios')], '43:3': [HE('formosa', 'A Porta Formosa')], '43:7': [EG('moises', 'Moisés no Egito')], '43:10': [CS('telhado', 'Pedro no terraço')],
+    '43:17': [AT('geral', 'Atenas'), AT('agora', 'A Ágora'), AT('stoa', 'Epicureus e estoicos'), AT('altar', 'Ao Deus desconhecido'), AT('areopago', 'Paulo no Areópago'), AT('partenon', 'O Partenon')],
+    '43:21': [HE('soreg', 'A barreira do templo')], '43:27': [NA('geral', 'O navio de Paulo'), NA('tempestade', 'Euroaquilão'), NA('ancoras', 'Quatro âncoras'), NA('encalhe', 'O encalhe')], '43:28': [NA('malta', 'Malta')],
+    '46:11': [NA('tempestade', 'Naufrágios')], '48:2': [HE('soreg', 'O muro de separação')], '54:4': [QU('escritorio', 'Os pergaminhos')], '57:10': [HE('veu', 'O véu'), HE('altar', 'Os sacrifícios')],
+    '57:11': [JE('queda', 'Pela fé caíram os muros'), EG('moises', 'Moisés')], '58:2': [JE('raabe', 'Raabe')],
+  };
+  Object.entries(MAIS3).forEach(([k, l]) => { VB.ILUSTRACOES[k] = (VB.ILUSTRACOES[k] || []).concat(l); });
   VB.abrir3D = function (modelo, parte) {
     document.querySelector('.v3d-fundo')?.remove();
     const f = document.createElement('div'); f.className = 'v3d-fundo'; f.setAttribute('role', 'dialog'); f.setAttribute('aria-label', 'Ilustração em 3D');
