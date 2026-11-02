@@ -332,8 +332,10 @@
     let test = livro && VB.LIVROS.indexOf(livro) >= 39 ? 'nt' : 'at';
     folha('Livro e capítulo', `<div class="abas-testamento" role="tablist">
         <button type="button" role="tab" data-test="at">Antigo Testamento</button><button type="button" role="tab" data-test="nt">Novo Testamento</button></div>
-      <div id="fl-area"></div>`, (el, fechar) => {
+      <div id="fl-area"></div>
+      ${VB.abrir3D ? '<button type="button" class="fl-3d" id="fl-3d"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span><b>Ilustrações em 3D</b><small>Tabernáculo, arca de Noé, templo, Jerusalém, Cafarnaum, achados arqueológicos e mais</small></span></button>' : ''}`, (el, fechar) => {
       const area = el.querySelector('#fl-area');
+      el.querySelector('#fl-3d')?.addEventListener('click', () => { fechar(); VB.abrir3D(); });
       const livros = () => {
         el.querySelectorAll('[data-test]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.test === test)));
         const lista = test === 'at' ? VB.LIVROS.slice(0, 39) : VB.LIVROS.slice(39);

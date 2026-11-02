@@ -1,5 +1,5 @@
 /* VideiraBook — service worker: deixa o app abrir rápido e mostra um aviso quando estiver sem internet */
-const CACHE = 'videirabook-v17';
+const CACHE = 'videirabook-v19';
 const BASE = ['/', '/css/style.css?v=4', '/js/core.js?v=4', '/js/aluno.js?v=4', '/js/professor.js?v=4', '/img/logo.svg',
   '/icon-192.png', '/fonts/newsreader-latin-opsz-normal.woff2', '/fonts/newsreader-latin-opsz-italic.woff2', '/fonts/figtree-latin-wght-normal.woff2'];
 
@@ -16,10 +16,12 @@ self.addEventListener('fetch', e => {
   // Dados (aulas, progresso, arquivos) sempre vêm do servidor
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/arquivos/')) return;
   // Telas e arquivos do app: tenta a internet primeiro; sem conexão, usa a cópia guardada
+  // (as ilustrações 3D têm página própria e são guardadas com o próprio endereço, sem substituir a tela do app)
+  const chave = req.mode === 'navigate' && !url.pathname.startsWith('/3d') ? '/' : req;
   e.respondWith(
     fetch(req).then(res => {
-      if (res.ok) { const copia = res.clone(); caches.open(CACHE).then(c => c.put(req.mode === 'navigate' ? '/' : req, copia)); }
+      if (res.ok) { const copia = res.clone(); caches.open(CACHE).then(c => c.put(chave, copia)); }
       return res;
-    }).catch(() => caches.match(req.mode === 'navigate' ? '/' : req).then(r => r || caches.match('/')))
+    }).catch(() => caches.match(chave).then(r => r || caches.match('/')))
   );
 });

@@ -662,6 +662,76 @@ window.VB = (function () {
   };
 
 
+  // ── Ilustrações 3D: quais capítulos têm modelo e em que parte ele abre. [modelo, parte, rótulo]
+  // Livros pelo índice em VB.LIVROS (0 = Gênesis).
+  const I3D = {
+    tab: n => ['tabernaculo', n], noe: n => ['noe', n], tem: n => ['templo', n], jer: n => ['jerusalem', n], ves: n => ['vestes', n],
+  };
+  const T = (p, r) => [...I3D.tab(p), r], N = (p, r) => [...I3D.noe(p), r], S = (p, r) => [...I3D.tem(p), r], J = (p, r) => [...I3D.jer(p), r], V = (p, r) => [...I3D.ves(p), r];
+  VB.ILUSTRACOES = {
+    '0:6': [N('geral', 'A arca de Noé'), N('andares', 'Os três andares'), N('porta', 'A porta')], '0:7': [N('animais', 'Os animais'), N('diluvio', 'O dilúvio')],
+    '0:8': [N('diluvio', 'O dilúvio'), N('arcoiris', 'Os montes de Ararate')], '0:9': [N('arcoiris', 'O arco-íris')],
+    '1:25': [T('arca', 'Arca da aliança'), T('mesa', 'Mesa dos pães'), T('candelabro', 'Candelabro')], '1:26': [T('tenda', 'A tenda'), T('veu', 'O véu')],
+    '1:27': [T('altar', 'Altar de bronze'), T('porta', 'Porta do átrio'), T('geral', 'O átrio')], '1:28': [V('geral', 'Vestes do sumo sacerdote'), V('peitoral', 'O peitoral'), V('mitra', 'A mitra')],
+    '1:29': [V('geral', 'Vestes sacerdotais'), T('altar', 'Altar de bronze')], '1:30': [T('incenso', 'Altar do incenso'), T('pia', 'Pia de bronze')],
+    '1:35': [T('geral', 'O tabernáculo')], '1:36': [T('tenda', 'A tenda'), T('veu', 'O véu')], '1:37': [T('arca', 'Arca da aliança'), T('mesa', 'Mesa dos pães'), T('candelabro', 'Candelabro'), T('incenso', 'Altar do incenso')],
+    '1:38': [T('altar', 'Altar de bronze'), T('pia', 'Pia de bronze'), T('geral', 'O átrio')], '1:39': [V('geral', 'Vestes do sumo sacerdote'), V('peitoral', 'O peitoral')], '1:40': [T('geral', 'O tabernáculo')],
+    '2:8': [V('geral', 'Vestes sacerdotais')], '2:16': [T('veu', 'O véu'), T('arca', 'Arca e propiciatório'), V('tunica', 'Túnica de linho')], '2:24': [T('mesa', 'Mesa dos pães'), T('candelabro', 'Candelabro')],
+    '10:6': [S('geral', 'Templo de Salomão'), S('santo', 'Lugar Santo'), S('santissimo', 'Santo dos Santos'), S('camaras', 'Câmaras laterais')],
+    '10:7': [S('colunas', 'Jaquim e Boaz'), S('mar', 'Mar de bronze'), S('pias', 'As dez pias'), S('portico', 'O pórtico')], '10:8': [S('santissimo', 'Santo dos Santos'), S('altar', 'O grande altar')],
+    '13:3': [S('geral', 'Templo de Salomão'), S('colunas', 'Jaquim e Boaz'), S('santissimo', 'Santo dos Santos')], '13:4': [S('altar', 'O grande altar'), S('mar', 'Mar de bronze'), S('pias', 'As dez pias'), S('santo', 'Lugar Santo')],
+    '13:5': [S('santissimo', 'Santo dos Santos')], '13:7': [S('altar', 'O grande altar'), S('santissimo', 'A glória no templo')],
+    '39:21': [J('esplanada', 'O templo e os cambistas'), J('geral', 'Jerusalém')], '39:24': [J('templo', 'O templo de Herodes'), N('geral', 'A arca de Noé')], '39:26': [J('oliveiras', 'Getsêmani')], '39:27': [J('golgota', 'Gólgota'), J('palacio', 'Palácio de Herodes')],
+    '40:11': [J('esplanada', 'O monte do templo')], '40:13': [J('templo', 'O templo de Herodes')], '40:14': [J('oliveiras', 'Getsêmani')], '40:15': [J('palacio', 'Palácio de Herodes'), J('golgota', 'Gólgota')],
+    '41:19': [J('geral', 'Jerusalém'), J('esplanada', 'O monte do templo')], '41:21': [J('templo', 'O templo de Herodes')], '41:22': [J('oliveiras', 'Monte das Oliveiras')], '41:23': [J('palacio', 'Palácio de Herodes'), J('golgota', 'Gólgota')],
+    '42:2': [J('templo', 'O templo de Herodes')], '42:5': [J('betesda', 'Tanque de Betesda')], '42:9': [J('siloe', 'Tanque de Siloé')], '42:10': [J('portico', 'Pórtico de Salomão')],
+    '42:18': [J('oliveiras', 'O jardim do outro lado do Cedrom')], '42:19': [J('golgota', 'Gólgota e o sepulcro')],
+    '43:1': [J('oliveiras', 'Monte das Oliveiras')], '43:3': [J('portico', 'Pórtico de Salomão')], '43:21': [J('antonia', 'Fortaleza Antônia')],
+    '57:4': [V('geral', 'O sumo sacerdote')], '57:5': [V('geral', 'O sumo sacerdote')], '57:9': [T('geral', 'O tabernáculo'), T('arca', 'Arca da aliança'), T('veu', 'O véu')], '57:10': [T('veu', 'O véu')],
+    '57:11': [N('geral', 'A arca de Noé')], '59:3': [N('geral', 'A arca de Noé')],
+  };
+  // segunda leva: arqueologia e vida diária
+  const mk = m => (p, r) => [m, p, r];
+  const MU = mk('museu'), TU = mk('tunel'), CA = mk('cafarnaum'), PO = mk('portao'), SE = mk('sepulcro'), ZI = mk('zigurate'), VI = mk('vinha');
+  const MAIS = {
+    '0:11': [ZI('geral', 'Torre de Babel'), ZI('tijolos', 'Tijolos e betume'), ZI('construcao', 'A obra interrompida'), ZI('ur', 'Ur dos caldeus')], '0:28': [ZI('escadas', 'As escadarias do zigurate')],
+    '1:27': [VI('azeite', 'Azeite puro para a luz')], '5:2': [PO('muralha', 'Casa na muralha')], '6:6': [VI('gideao', 'Gideão no lagar')], '7:4': [PO('anciaos', 'Os anciãos à porta')],
+    '9:18': [PO('camaras', 'Davi entre as portas')], '10:1': [TU('giom', 'Fonte de Giom')], '10:9': [PO('geral', 'Os portões de Salomão')],
+    '11:3': [MU('mesa', 'Pedra Moabita')], '11:7': [PO('camaras', 'Mercado à porta')], '11:8': [MU('tel', 'Estela de Tel Dã')], '11:9': [MU('obelisco', 'Obelisco Negro')], '11:10': [MU('obelisco', 'Obelisco Negro: Jeú')],
+    '11:18': [MU('prisma', 'Prisma de Senaqueribe'), TU('assiria', 'A ameaça assíria')], '11:19': [MU('prisma', 'Prisma de Senaqueribe')], '11:20': [TU('geral', 'Túnel de Ezequias'), MU('siloe', 'Inscrição de Siloé')],
+    '13:32': [TU('geral', 'Túnel de Ezequias'), TU('giom', 'Fonte de Giom'), MU('prisma', 'Prisma de Senaqueribe')], '14:1': [MU('ciro', 'Cilindro de Ciro')], '19:31': [PO('anciaos', 'Conhecido nas portas')],
+    '22:5': [VI('geral', 'A vinha'), VI('torre', 'A torre'), VI('lagar', 'O lagar')], '22:22': [TU('geral', 'O reservatório')], '22:36': [MU('prisma', 'Prisma de Senaqueribe')], '22:37': [MU('prisma', 'Prisma de Senaqueribe')],
+    '22:44': [MU('ciro', 'Cilindro de Ciro')], '22:45': [MU('ciro', 'Cilindro de Ciro')], '22:53': [MU('isaias', 'Rolo de Isaías')], '22:63': [VI('lagar', 'O lagar')], '29:5': [PO('anciaos', 'Justiça na porta')],
+    '39:4': [CA('geral', 'Cafarnaum')], '39:8': [CA('pedro', 'Casa de Pedro')], '39:9': [CA('teto', 'O paralítico')], '39:14': [CA('barco', 'O barco da Galileia')],
+    '39:21': [VI('torre', 'A torre da vinha')], '39:26': [MU('caifas', 'Ossuário de Caifás'), VI('prensa', 'Getsêmani: prensa de azeite')], '39:27': [MU('pilatos', 'Pedra de Pilatos'), SE('pedra', 'A pedra do sepulcro')], '39:28': [SE('pedra', 'O sepulcro aberto')],
+    '40:1': [CA('sinagoga', 'Sinagoga de Cafarnaum'), CA('pedro', 'Casa de Pedro')], '40:2': [CA('teto', 'O paralítico')], '40:4': [CA('barco', 'O barco da Galileia')], '40:12': [VI('torre', 'A torre da vinha')],
+    '40:14': [VI('prensa', 'Getsêmani: prensa de azeite')], '40:15': [SE('pedra', 'A pedra do sepulcro')], '40:16': [SE('pedra', 'A pedra removida'), SE('camara', 'A câmara')],
+    '41:3': [MU('pilatos', 'Pedra de Pilatos')], '41:4': [CA('sinagoga', 'A sinagoga'), MU('isaias', 'Rolo de Isaías')], '41:5': [CA('barco', 'O barco da Galileia'), CA('teto', 'O paralítico')], '41:7': [CA('sinagoga', 'A sinagoga')],
+    '41:20': [VI('torre', 'A torre da vinha')], '41:23': [MU('pilatos', 'Pedra de Pilatos'), SE('geral', 'O sepulcro')], '41:24': [SE('pedra', 'A pedra removida'), SE('lencois', 'Os lençóis')],
+    '42:6': [CA('sinagoga', 'Sinagoga de Cafarnaum')], '42:9': [TU('siloe', 'O tanque de Siloé')], '42:11': [SE('pedra', 'Túmulo com pedra')], '42:15': [VI('geral', 'A vinha')], '42:18': [MU('caifas', 'Ossuário de Caifás')],
+    '42:19': [MU('pilatos', 'Pedra de Pilatos'), SE('geral', 'O sepulcro no jardim')], '42:20': [SE('entrada', 'A entrada baixa'), SE('lencois', 'Os lençóis')], '43:7': [ZI('ur', 'Ur dos caldeus')],
+    '58:5': [VI('azeite', 'O azeite')], '65:14': [VI('lagar', 'O lagar')],
+  };
+  Object.entries(MAIS).forEach(([k, l]) => { VB.ILUSTRACOES[k] = (VB.ILUSTRACOES[k] || []).concat(l); });
+  VB.abrir3D = function (modelo, parte) {
+    document.querySelector('.v3d-fundo')?.remove();
+    const f = document.createElement('div'); f.className = 'v3d-fundo'; f.setAttribute('role', 'dialog'); f.setAttribute('aria-label', 'Ilustração em 3D');
+    f.innerHTML = `<iframe src="/3d/#${encodeURIComponent(modelo || '')}${parte ? '-' + encodeURIComponent(parte) : ''}" title="Ilustração em 3D" allow="fullscreen"></iframe>`;
+    document.body.appendChild(f); document.body.classList.add('v3d-aberto');
+    const fechar = () => { f.remove(); document.body.classList.remove('v3d-aberto'); removeEventListener('message', msg); removeEventListener('keydown', esc3d); };
+    const msg = e => { if (e.origin === location.origin && e.data && e.data.tipo === 'fechar-3d') fechar(); };
+    const esc3d = e => { if (e.key === 'Escape') fechar(); };
+    addEventListener('message', msg); addEventListener('keydown', esc3d);
+    addEventListener('hashchange', fechar, { once: true });
+  };
+  // botões "Ver em 3D" do capítulo
+  VB.botoes3D = function (livro, cap) {
+    const l = VB.ILUSTRACOES[`${livro}:${cap}`]; if (!l) return '';
+    const ico = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>';
+    return `<div class="leitor-3d" role="group" aria-label="Ilustrações em 3D deste capítulo"><span>${ico}Ver em 3D</span>${l.map(([m, p, r]) => `<button type="button" class="chip-3d" data-m3d="${m}" data-p3d="${p}">${esc(r)}</button>`).join('')}</div>`;
+  };
+  document.addEventListener('click', e => { const b = e.target.closest('[data-m3d]'); if (b) { e.preventDefault(); VB.abrir3D(b.dataset.m3d, b.dataset.p3d); } });
+
   // Clique numa referência: abre o trecho na versão escolhida, numa janela por cima da página
   VB.popupVersiculo = async function (a) {
     const livro = VB.LIVROS[Number(a.dataset.livro)]; const cap = Number(a.dataset.cap);

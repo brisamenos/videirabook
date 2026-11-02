@@ -899,6 +899,9 @@ app.get('/api/biblia-externa', auth, h(async (req, res) => {
   res.json({ permitido: embutir.permitido });
 }));
 
+// Ilustrações bíblicas em 3D (modelos próprios; three.js vai junto na pasta)
+app.use('/3d', express.static(path.join(__dirname, 'ilustracoes'), { maxAge: 0, index: 'index.html' }));
+
 // SPA
 app.use((req, res, next) => {
   if (req.method !== 'GET') return next();
