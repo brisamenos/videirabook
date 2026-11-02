@@ -10,10 +10,11 @@
 *, *::before, *::after { box-sizing: border-box; }
 body { margin: 0; }
 [hidden] { display: none !important; }
-/* Layout: palco 3D em tela cheia; seletor de modelos no topo; painel de estações embaixo no celular e à esquerda no tablet/computador. Visual único (noite no deserto), não segue o tema. */
+/* Layout: palco 3D em tela cheia; topo com catálogo e ações; painel da parte atual embaixo no celular e à esquerda no tablet/computador.
+   Visual único escuro sobre a cena, não segue o tema. */
 :root {
   --ceu: #1b2430;
-  --painel: rgba(20, 28, 26, 0.86);
+  --painel: rgba(18, 24, 23, 0.88);
   --texto: #f3ecdc;
   --suave: #b9b19c;
   --ouro: #d9b45a;
@@ -29,67 +30,103 @@ body { background: var(--ceu); color: var(--texto); font-family: var(--f-texto);
 
 .topo {
   position: fixed; top: 0; left: 0; right: 0; z-index: 5;
-  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: 12px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  padding-top: calc(12px + env(safe-area-inset-top, 0px)); padding-bottom: 18px;
   padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
-  background: linear-gradient(to bottom, rgba(14, 19, 24, .75), rgba(14, 19, 24, 0));
+  background: linear-gradient(to bottom, rgba(10, 14, 18, .72), rgba(10, 14, 18, 0));
   pointer-events: none;
 }
-.topo h1 { font-family: var(--f-titulo); font-weight: 600; font-size: 1.45rem; margin: 0; letter-spacing: .01em; text-wrap: balance; }
-.topo h1 small { display: block; font-family: var(--f-texto); font-weight: 400; font-size: .78rem; color: var(--suave); letter-spacing: .02em; }
+.topo .cab { display: flex; align-items: flex-start; gap: 12px; min-width: 0; flex: 1 1 280px; }
+.topo h1 { font-family: var(--f-titulo); font-weight: 600; font-size: 1.45rem; line-height: 1.15; margin: 2px 0 0; letter-spacing: .01em; text-wrap: balance; text-shadow: 0 1px 12px rgba(0,0,0,.5); }
+.topo h1 small { display: block; font-family: var(--f-texto); font-weight: 400; font-size: .78rem; color: var(--suave); letter-spacing: .02em; margin-top: 3px; }
 .botoes { display: flex; gap: 8px; pointer-events: auto; flex-wrap: wrap; }
 .btn {
-  font: 500 .85rem var(--f-texto); color: var(--texto); background: rgba(20, 28, 26, .7);
+  font: 500 .85rem var(--f-texto); color: var(--texto); background: rgba(18, 24, 23, .72);
   border: 1px solid var(--linha); border-radius: 999px; padding: 8px 14px; cursor: pointer;
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; align-items: center; gap: 6px; pointer-events: auto; white-space: nowrap;
 }
+.btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .btn[aria-pressed="true"] { background: var(--ouro); color: #1d1a12; border-color: var(--ouro); }
-.btn:focus-visible, .estacao:focus-visible { outline: 2px solid var(--ouro); outline-offset: 2px; }
+.btn:focus-visible, .estacao:focus-visible, .pino:focus-visible, .cat-item:focus-visible { outline: 2px solid var(--ouro); outline-offset: 2px; }
 
 .painel {
-  position: fixed; z-index: 5; background: var(--painel); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--linha);
+  position: fixed; z-index: 5; background: var(--painel); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--linha); box-shadow: 0 18px 40px -20px rgba(0,0,0,.7);
   left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px));
   bottom: calc(12px + env(safe-area-inset-bottom, 0px));
-  border-radius: 18px; padding: 14px 16px 12px; max-height: 46%; display: flex; flex-direction: column; gap: 10px;
+  border-radius: 18px; padding: 12px 16px; max-height: 48%; display: flex; flex-direction: column; gap: 10px;
 }
+.nav-est { display: flex; align-items: center; gap: 8px; }
+.nav-est .contador { font-size: .75rem; color: var(--suave); font-variant-numeric: tabular-nums; margin-right: auto; }
+.nav-est .btn { padding: 6px 10px; }
 .info { overflow-y: auto; min-width: 0; }
 .info .ref { font: 600 .74rem var(--f-texto); color: var(--ouro); letter-spacing: .08em; text-transform: uppercase; }
-.info h2 { font-family: var(--f-titulo); font-weight: 600; font-size: 1.35rem; margin: 2px 0 4px; text-wrap: balance; }
+.info h2 { font-family: var(--f-titulo); font-weight: 600; font-size: 1.35rem; line-height: 1.2; margin: 2px 0 4px; text-wrap: balance; }
 .info .medida { font-size: .82rem; color: var(--suave); margin: 0 0 6px; font-variant-numeric: tabular-nums; }
-.info p.desc { margin: 0; font-size: .93rem; line-height: 1.5; max-width: 62ch; }
+.info p.desc { margin: 0; font-size: .93rem; line-height: 1.55; max-width: 62ch; }
 .estacoes { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
 .estacao {
   flex: 0 0 auto; font: 500 .8rem var(--f-texto); color: var(--texto); background: transparent;
-  border: 1px solid var(--linha); border-radius: 999px; padding: 6px 11px; cursor: pointer; white-space: nowrap;
+  border: 1px solid var(--linha); border-radius: 999px; padding: 5px 11px 5px 6px; cursor: pointer; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
 }
+.estacao:first-child { padding-left: 11px; }
+.estacao i, .pino i { font-style: normal; font-size: .7rem; font-weight: 600; width: 19px; height: 19px; border-radius: 50%; display: inline-grid; place-items: center; background: rgba(243,236,220,.14); font-variant-numeric: tabular-nums; }
 .estacao[aria-current="true"] { border-color: var(--ouro); color: var(--ouro); }
+.estacao[aria-current="true"] i { background: var(--ouro); color: #1d1a12; }
 .dica { font-size: .74rem; color: var(--suave); margin: 0; }
 
-@media (min-width: 900px) {
-  .painel { right: auto; width: 360px; top: calc(86px + env(safe-area-inset-top, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-height: none; left: max(16px, env(safe-area-inset-left, 0px)); }
-  .estacoes { flex-wrap: wrap; overflow: visible; order: 2; }
-  .info { flex: 1; }
+/* marcadores na cena */
+#pinos { position: fixed; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+.pino {
+  position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px; border-radius: 999px;
+  background: rgba(18, 24, 23, .78); border: 1px solid rgba(243,236,220,.35); color: var(--texto); font: 500 .75rem var(--f-texto);
+  box-shadow: 0 4px 14px rgba(0,0,0,.35); will-change: transform;
 }
-.modelos { display: flex; gap: 6px; overflow-x: auto; pointer-events: auto; scrollbar-width: none; max-width: 100%; }
-.modelos::-webkit-scrollbar { display: none; }
-.modelo { flex: 0 0 auto; font: 500 .8rem var(--f-texto); color: var(--suave); background: rgba(20, 28, 26, .55); border: 1px solid var(--linha); border-radius: 999px; padding: 6px 12px; cursor: pointer; white-space: nowrap; }
-.modelo[aria-current="true"] { color: var(--texto); border-color: var(--texto); }
-.modelo:focus-visible { outline: 2px solid var(--ouro); outline-offset: 2px; }
-.topo .cab { display: flex; flex-direction: column; gap: 8px; min-width: 0; flex: 1 1 260px; }
-@media (min-width: 900px) { .painel { top: calc(124px + env(safe-area-inset-top, 0px)); } }
+.pino i { background: var(--ouro); color: #1d1a12; width: 22px; height: 22px; }
+.pino span { display: none; padding-right: 8px; white-space: nowrap; }
+.pino:hover span, .pino:focus-visible span, .pino.atual span { display: inline; }
+.pino.atual { border-color: var(--ouro); }
+
+/* catálogo de modelos */
+#catalogo { position: fixed; inset: 0; z-index: 20; background: rgba(8, 11, 14, .72); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); overflow-y: auto;
+  padding-top: calc(20px + env(safe-area-inset-top, 0px)); padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.cat-caixa { max-width: 980px; margin: 0 auto; }
+.cat-cab { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.cat-cab h2 { font-family: var(--f-titulo); font-weight: 600; font-size: 1.6rem; margin: 0; }
+#cat-grade section h2 { font: 600 .78rem var(--f-texto); color: var(--ouro); letter-spacing: .08em; text-transform: uppercase; margin: 18px 0 8px; }
+.cat-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.cat-item { text-align: left; background: rgba(243,236,220,.06); border: 1px solid var(--linha); border-radius: 14px; padding: 12px 14px; color: var(--texto); cursor: pointer; display: flex; flex-direction: column; gap: 4px; font: inherit; min-width: 0; }
+.cat-item:hover { border-color: var(--ouro); }
+.cat-item b { font-family: var(--f-titulo); font-weight: 600; font-size: 1.08rem; }
+.cat-item span { font-size: .78rem; color: var(--suave); line-height: 1.4; }
+
+#veu { position: fixed; inset: 0; z-index: 8; background: var(--ceu); opacity: 0; pointer-events: none; }
+#veu.some { animation: some 900ms ease-out; }
+@keyframes some { from { opacity: 1; } to { opacity: 0; } }
+
+@media (min-width: 900px) {
+  .painel { right: auto; width: 370px; top: calc(96px + env(safe-area-inset-top, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px)); max-height: none; left: max(16px, env(safe-area-inset-left, 0px)); }
+  .estacoes { flex-wrap: wrap; overflow: visible; order: 3; }
+  .info { flex: 1; }
+  .dica { order: 4; }
+}
 #carregando { position: fixed; inset: 0; display: grid; place-items: center; z-index: 9; background: var(--ceu); font-family: var(--f-titulo); font-size: 1.2rem; color: var(--suave); }
-@media (prefers-reduced-motion: reduce) { .btn, .estacao { transition: none; } }
+@media (prefers-reduced-motion: reduce) { #veu.some { animation: none; } }
 </style>
 </head>
 <body>
 
 <div id="palco" aria-label="Modelo 3D. Arraste para girar, use dois dedos para aproximar."></div>
+<div id="pinos"></div>
+<div id="veu"></div>
 <div id="carregando">Montando o modelo…</div>
 
 <header class="topo">
   <div class="cab">
-    <nav class="modelos" id="modelos" aria-label="Modelos"></nav>
+    <button class="btn" id="b-modelos" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h7v6H4zM13 5h7v6h-7zM4 13h7v6H4zM13 13h7v6h-7z"/></svg>Modelos</button>
     <h1 id="titulo">Ilustrações bíblicas</h1>
   </div>
   <div class="botoes">
@@ -100,10 +137,23 @@ body { background: var(--ceu); color: var(--texto); font-family: var(--f-texto);
 </header>
 
 <section class="painel" aria-live="polite">
+  <div class="nav-est">
+    <span class="contador" id="contador"></span>
+    <button class="btn" id="b-ant" aria-label="Parte anterior"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg></button>
+    <button class="btn" id="b-ouvir" aria-pressed="false">Ouvir</button>
+    <button class="btn" id="b-prox" aria-label="Próxima parte"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></button>
+  </div>
   <div class="info" id="info"></div>
   <nav class="estacoes" id="estacoes" aria-label="Partes do modelo"></nav>
-  <p class="dica">Arraste para girar · pinça ou roda para aproximar · toque numa parte para ir até ela</p>
+  <p class="dica">Arraste para girar · pinça ou roda para aproximar · toque num número para ir até a parte</p>
 </section>
+
+<div id="catalogo" role="dialog" aria-modal="true" aria-label="Escolher modelo" hidden>
+  <div class="cat-caixa">
+    <div class="cat-cab"><h2>Ilustrações em 3D</h2><button class="btn" id="cat-fechar">Fechar</button></div>
+    <div id="cat-grade"></div>
+  </div>
+</div>
 
 <script src="three.min.js"></script>
 <script src="OrbitControls.js"></script>
@@ -116,16 +166,25 @@ body { background: var(--ceu); color: var(--texto); font-family: var(--f-texto);
 </script>
 <script src="base.js"></script>
 <script src="tabernaculo.js"></script>
+<script src="acampamento.js"></script>
 <script src="noe.js"></script>
+<script src="zigurate.js"></script>
+<script src="egito.js"></script>
+<script src="jerico.js"></script>
+<script src="portao.js"></script>
 <script src="templo.js"></script>
-<script src="jerusalem.js"></script>
 <script src="vestes.js"></script>
+<script src="babilonia.js"></script>
+<script src="jerusalem.js"></script>
+<script src="herodes.js"></script>
+<script src="cafarnaum.js"></script>
+<script src="sepulcro.js"></script>
+<script src="navio.js"></script>
+<script src="atenas.js"></script>
 <script src="museu.js"></script>
 <script src="tunel.js"></script>
-<script src="cafarnaum.js"></script>
-<script src="portao.js"></script>
-<script src="sepulcro.js"></script>
-<script src="zigurate.js"></script>
+<script src="qumran.js"></script>
+<script src="casa.js"></script>
 <script src="vinha.js"></script>
 </body>
 </html>
