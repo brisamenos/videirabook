@@ -8,6 +8,7 @@
       ['cursos', '#/p/cursos', 'Cursos e aulas', icone.livro],
       ['alunos', '#/p/alunos', 'Alunos', icone.pessoas],
       ['inscricoes', '#/p/inscricoes', 'Inscrições', icone.pessoa],
+      ['igrejas', '#/p/igrejas', 'Igrejas', icone.casa],
       ['modulos', '#/p/modulos', 'Módulos bíblicos', icone.livro],
       ['ia', '#/p/ia', 'Sermões com IA', icone.caneta],
       ['estudo', '#/p/estudo', 'Bíblia de estudo', icone.marcador],
@@ -19,7 +20,7 @@
         <aside class="lateral" id="lateral">
           <a class="marca" href="#/p/painel"><img src="/img/logo.svg" alt="">VideiraBook</a>
           <nav aria-label="Professor">${links.map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}${l[2]}</a>`).join('')}</nav>
-          <nav aria-label="Visão do aluno"><a href="#/inicio">${icone.olho}Ver como aluno</a><a href="#/biblia">${icone.livro}Bíblia</a>${VB.me.ia ? `<a href="#/sermoes">${icone.caneta}Meus sermões</a>` : ''}
+          <nav aria-label="Visão do aluno"><a href="#" id="btn-sino-prof" style="position:relative">${icone.sino}Notificações<span class="sino-badge" hidden style="position:static;margin-left:auto"></span></a><a href="#/inicio">${icone.casa}Mural da turma</a><a href="#/biblia">${icone.livro}Bíblia</a>${VB.me.ia ? `<a href="#/sermoes">${icone.caneta}Meus sermões</a>` : ''}
             <a href="#" id="btn-leitura-prof"><span class="aa-icone" aria-hidden="true">Aa</span>Leitura e modo noturno</a></nav>
           <div class="rodape"><div style="color:#fff;font-weight:600">${esc(VB.me.nome)}</div>
             <div style="margin:.15rem 0 .6rem">Professor · <a href="#/perfil">trocar senha</a></div>
@@ -32,6 +33,7 @@
         </div>
       </div>`;
     $('#btn-sair').addEventListener('click', VB.sair);
+    if (VB.rede) VB.rede.ligarSino($('#btn-sino-prof')); else $('#btn-sino-prof').remove();
     $('#btn-leitura-prof').addEventListener('click', e => { e.preventDefault(); VB.painelLeitura(); });
     $('#abrir-menu').addEventListener('click', e => { e.stopPropagation(); $('#lateral').classList.add('aberta'); });
     document.addEventListener('click', function f(e) {
@@ -41,6 +43,88 @@
   }
   const carregando = ativo => moldura(ativo, '<div class="carregando"></div>');
   const cabecalho = (titulo, sub, acoes = '') => `<div class="admin-cab"><div><h1>${titulo}</h1>${sub ? `<p>${sub}</p>` : ''}</div>${acoes ? `<div class="acoes">${acoes}</div>` : ''}</div>`;
+
+  // ═════════════ IGREJAS (cada igreja tem endereço próprio, administração, rol, financeiro e mural separados)
+  VB.registrar(/^\/p\/igrejas$/, 'professor', async () => {
+    carregando('igrejas'); document.title = 'Igrejas · VideiraBook';
+    const lista = await VB.api('/api/admin/igrejas');
+    $('#conteudo').innerHTML = `
+      ${cabecalho('Igrejas', 'Cada igreja tem o próprio endereço, administração, rol de membros, financeiro e mural. Os dados de uma não aparecem para outra.', `<button class="btn" id="ig-nova">${icone.mais}Nova igreja</button>`)}
+      ${lista.length ? `<div class="igrejas-lista">${lista.map(i => `<div class="painel igreja-item${i.ativo ? '' : ' desativada'}">
+        <div class="ii-cab">${i.logo_url ? `<img src="${esc(i.logo_url)}" alt="">` : `<span class="logo-letra" style="background:${esc(i.cor_primaria)};color:${esc(i.cor_destaque)}" aria-hidden="true">${esc(VB.iniciaisIgreja(i.nome))}</span>`}
+          <div><h3>${esc(i.nome)}</h3><p class="muted pequeno"><a href="/${esc(i.slug)}" target="_blank" rel="noopener">${esc(location.host)}/${esc(i.slug)}</a>${i.cidade ? ` · ${esc(i.cidade)}` : ''}</p></div>
+          ${i.ativo ? '' : '<span class="selo">Desativada</span>'}</div>
+        <p class="pequeno" style="margin:.6rem 0">${i.contas} conta${i.contas === 1 ? '' : 's'} no app · ${i.membros} no rol${i.admins ? `<br><span class="muted">Administração: ${esc(i.admins)}</span>` : ''}</p>
+        <div class="ii-chaves">
+          <label class="chave"><input type="checkbox" data-ig="${i.id}" data-campo="ia_ativa" ${i.ia_ativa ? 'checked' : ''}>IA para a administração</label>
+          <label class="chave"><input type="checkbox" data-ig="${i.id}" data-campo="estudo_ativo" ${i.estudo_ativo ? 'checked' : ''}>Bíblias de estudo</label>
+          <label class="chave"><input type="checkbox" data-ig="${i.id}" data-campo="ativo" ${i.ativo ? 'checked' : ''}>Igreja ativa</label>
+        </div>
+        <div class="ii-acoes"><button class="btn sec mini" data-ig-editar="${i.id}">${icone.lapis}Editar</button><button class="btn sec mini" data-ig-admin="${i.id}">${icone.pessoa}Login de administração</button><button class="btn fantasma mini" data-ig-excluir="${i.id}" style="color:var(--perigo)">${icone.lixo}Excluir</button></div>
+      </div>`).join('')}</div>`
+        : `<div class="vazio"><strong>Nenhuma igreja cadastrada</strong>Crie a primeira igreja com o login do pastor ou da secretaria. Eles recebem um painel para cuidar do rol de membros, do financeiro e do mural de informações.</div>`}`;
+    const slugify = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
+    $('#ig-nova').addEventListener('click', () => {
+      const md = VB.modal({ titulo: 'Nova igreja', largo: true, corpo: `<form id="f-ig">
+        <div class="linha-campos"><label class="campo"><span>Nome da igreja</span><input class="input" name="nome" required maxlength="120" placeholder="Igreja de Cristo"></label>
+          <label class="campo"><span>Cidade</span><input class="input" name="cidade" maxlength="80"></label></div>
+        <label class="campo"><span>Endereço no app</span><div class="campo-slug"><span>${esc(location.host)}/</span><input class="input" name="slug" required maxlength="60" pattern="[a-z0-9-]{3,60}" placeholder="igreja-de-cristo"></div><small>Letras minúsculas, números e hífen. É o link que os membros usam para criar conta e entrar.</small></label>
+        <label class="campo"><span>Cores iniciais</span><select class="input" name="tema">${['Videira', 'Vinho', 'Oceano', 'Laranja e preto', 'Real', 'Terra', 'Grafite', 'Rubi'].map(t => `<option>${t}</option>`).join('')}</select><small>A administração da igreja pode trocar depois.</small></label>
+        <h3 style="margin:1.2rem 0 .6rem">Login de administração</h3>
+        <div class="linha-campos"><label class="campo"><span>Nome</span><input class="input" name="admin_nome" required maxlength="120" placeholder="Pr. Fulano de Tal"></label>
+          <label class="campo"><span>E-mail (login)</span><input class="input" type="email" name="admin_email" required></label>
+          <label class="campo"><span>Senha</span><input class="input" name="admin_senha" required minlength="6"></label></div>
+        <label class="chave" style="margin-bottom:.6rem"><input type="checkbox" name="ia_ativa">Liberar a IA para a administração desta igreja</label>
+        <label class="chave"><input type="checkbox" name="estudo_ativo">Liberar as Bíblias de estudo para os membros</label>
+        <p class="erro-msg" id="fig-erro"></p></form>`,
+        rodape: '<button class="btn sec" data-fechar>Cancelar</button><button class="btn" type="submit" form="f-ig">Criar igreja</button>' });
+      const nome = md.el.querySelector('[name=nome]'), slug = md.el.querySelector('[name=slug]'); let mexeu = false;
+      slug.addEventListener('input', () => { mexeu = true; }); nome.addEventListener('input', () => { if (!mexeu) slug.value = slugify(nome.value); });
+      $('#f-ig', md.el).addEventListener('submit', async e => {
+        e.preventDefault(); const f = Object.fromEntries(new FormData(e.target)); f.ia_ativa = !!f.ia_ativa; f.estudo_ativo = !!f.estudo_ativo;
+        try { const r = await VB.api('/api/admin/igrejas', { method: 'POST', body: f }); md.fechar();
+          VB.modal({ titulo: 'Igreja criada', corpo: `<p style="margin:0 0 .8rem">Envie estes dados para a administração da igreja:</p>
+            <div class="painel" style="margin:0"><p style="margin:0 0 .4rem"><strong>Endereço:</strong> ${esc(location.origin)}/${esc(r.slug)}</p><p style="margin:0 0 .4rem"><strong>Login:</strong> ${esc(f.admin_email)}</p><p style="margin:0"><strong>Senha:</strong> ${esc(f.admin_senha)}</p></div>`,
+            rodape: '<button class="btn" data-fechar>Pronto</button>' });
+          VB.rota(); }
+        catch (er) { $('#fig-erro', md.el).textContent = er.message; }
+      });
+    });
+    $$('[data-ig]').forEach(c => c.addEventListener('change', async () => {
+      try { await VB.api(`/api/admin/igrejas/${c.dataset.ig}`, { method: 'PUT', body: { [c.dataset.campo]: c.checked } }); VB.toast('Alteração salva'); if (c.dataset.campo === 'ativo') VB.rota(); }
+      catch (er) { c.checked = !c.checked; VB.erro(er); }
+    }));
+    $$('[data-ig-editar]').forEach(b => b.addEventListener('click', () => {
+      const i = lista.find(x => x.id === Number(b.dataset.igEditar));
+      const md = VB.modal({ titulo: esc(i.nome), corpo: `<form id="f-ige">
+        <label class="campo"><span>Nome</span><input class="input" name="nome" required maxlength="120" value="${esc(i.nome)}"></label>
+        <label class="campo"><span>Cidade</span><input class="input" name="cidade" maxlength="80" value="${esc(i.cidade || '')}"></label>
+        <label class="campo"><span>Endereço no app</span><div class="campo-slug"><span>${esc(location.host)}/</span><input class="input" name="slug" required maxlength="60" value="${esc(i.slug)}"></div><small>Se mudar, o link antigo deixa de funcionar.</small></label>
+        <p class="erro-msg" id="fige-erro"></p></form>`, rodape: '<button class="btn sec" data-fechar>Cancelar</button><button class="btn" type="submit" form="f-ige">Salvar</button>' });
+      $('#f-ige', md.el).addEventListener('submit', async e => { e.preventDefault();
+        try { await VB.api(`/api/admin/igrejas/${i.id}`, { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) }); md.fechar(); VB.toast('Igreja atualizada'); VB.rota(); } catch (er) { $('#fige-erro', md.el).textContent = er.message; } });
+    }));
+    $$('[data-ig-admin]').forEach(b => b.addEventListener('click', () => {
+      const i = lista.find(x => x.id === Number(b.dataset.igAdmin));
+      const md = VB.modal({ titulo: 'Login de administração', corpo: `<p class="muted pequeno" style="margin:0 0 1rem">Para criar outro login, preencha os três campos. Para trocar a senha de quem já administra, informe o e-mail dele e a nova senha.</p><form id="f-iga">
+        <label class="campo"><span>Nome</span><input class="input" name="nome" maxlength="120"></label>
+        <label class="campo"><span>E-mail (login)</span><input class="input" type="email" name="email" required></label>
+        <label class="campo"><span>Senha</span><input class="input" name="senha" required minlength="6"></label>
+        <p class="erro-msg" id="figa-erro"></p></form>`, rodape: '<button class="btn sec" data-fechar>Cancelar</button><button class="btn" type="submit" form="f-iga">Salvar login</button>' });
+      $('#f-iga', md.el).addEventListener('submit', async e => { e.preventDefault();
+        try { const r = await VB.api(`/api/admin/igrejas/${i.id}/admins`, { method: 'POST', body: Object.fromEntries(new FormData(e.target)) }); md.fechar(); VB.toast(r.atualizado ? 'Senha trocada' : 'Login criado'); VB.rota(); } catch (er) { $('#figa-erro', md.el).textContent = er.message; } });
+    }));
+    $$('[data-ig-excluir]').forEach(b => b.addEventListener('click', () => {
+      const i = lista.find(x => x.id === Number(b.dataset.igExcluir));
+      const md = VB.modal({ titulo: 'Excluir igreja', corpo: `<p style="margin:0 0 .8rem">Isto apaga <strong>${esc(i.nome)}</strong> com todas as contas, o rol de membros, o financeiro, os arquivos e as publicações do mural. Não dá para desfazer.</p>
+        <p class="muted pequeno" style="margin:0 0 1rem">Se quiser só suspender o acesso, desligue “Igreja ativa”.</p>
+        <label class="campo"><span>Para confirmar, digite <strong>${esc(i.slug)}</strong></span><input class="input" id="conf-slug" autocomplete="off"></label><p class="erro-msg" id="fx-erro"></p>`,
+        rodape: '<button class="btn sec" data-fechar>Cancelar</button><button class="btn" style="background:var(--perigo)" id="fx-ok">Excluir para sempre</button>' });
+      $('#fx-ok', md.el).addEventListener('click', async () => {
+        try { await VB.api(`/api/admin/igrejas/${i.id}`, { method: 'DELETE', body: { confirmar: $('#conf-slug', md.el).value } }); md.fechar(); VB.toast('Igreja excluída'); VB.rota(); } catch (er) { $('#fx-erro', md.el).textContent = er.message; }
+      });
+    }));
+  });
 
   // ═════════════ PAINEL
   VB.registrar(/^\/p\/painel$/, 'professor', async () => {
@@ -117,7 +201,7 @@
         </div>
         <label class="campo"><span>${novo ? 'Senha inicial' : 'Nova senha'}</span>
           <div style="display:flex;gap:.5rem"><input class="input" name="senha" ${novo ? 'required' : ''} minlength="6" value="${senhaIni}" placeholder="${novo ? '' : 'Deixe em branco para manter'}"><button type="button" class="btn sec" id="gerar">Gerar</button></div></label>
-        ${!novo ? `<label class="chave"><input type="checkbox" name="ativo" ${al.ativo ? 'checked' : ''}>Acesso ativo</label>` : ''}
+        ${!novo ? `<label class="chave"><input type="checkbox" name="ativo" ${al.ativo ? 'checked' : ''}>Acesso ativo</label>` : `<label class="chave"><input type="checkbox" name="liberar" checked>Já liberar o curso para este aluno</label>`}
       </form>`,
       rodape: `<button class="btn sec" data-fechar>Cancelar</button><button class="btn" id="salvar">${novo ? 'Cadastrar aluno' : 'Salvar alterações'}</button>`,
     });
@@ -130,7 +214,7 @@
     m.el.querySelector('#salvar').addEventListener('click', async () => {
       if (!f.reportValidity()) return;
       const corpo = { nome: f.nome.value.trim(), usuario: f.usuario.value.trim(), telefone: f.telefone.value.trim(), senha: f.senha.value };
-      if (!novo) corpo.ativo = f.ativo.checked;
+      if (!novo) corpo.ativo = f.ativo.checked; else corpo.liberar_curso = f.liberar.checked;
       try {
         let r;
         if (novo) r = await VB.api('/api/admin/alunos', { method: 'POST', body: corpo });
@@ -151,7 +235,7 @@
       const vis = lista.filter(a => !f || a.nome.toLowerCase().includes(f) || a.usuario.includes(f));
       $('#tab-alunos').innerHTML = vis.length ? `<table class="tabela"><thead><tr><th>Aluno</th><th>Progresso</th><th class="col-opc">Presenças</th><th class="col-opc">Último acesso</th><th></th></tr></thead><tbody>
         ${vis.map(a => `<tr>
-          <td><div class="pessoa"><span class="avatar">${esc(VB.iniciais(a.nome))}</span><div><a href="#/p/aluno/${a.id}" style="color:inherit;text-decoration:none"><strong>${esc(a.nome)}</strong></a><small>${esc(a.usuario)}${a.ativo ? '' : ' · <span style="color:var(--perigo)">desativado</span>'}</small></div></div></td>
+          <td><div class="pessoa"><span class="avatar">${esc(VB.iniciais(a.nome))}</span><div><a href="#/p/aluno/${a.id}" style="color:inherit;text-decoration:none"><strong>${esc(a.nome)}</strong></a><small>${esc(a.usuario)}${a.ativo ? '' : ' · <span style="color:var(--perigo)">desativado</span>'}${a.origem === 'inscricao' ? ' · inscrição' : ''}${a.cursos_liberados.length ? '' : ' · <span style="color:var(--ouro)">sem curso</span>'}</small></div></div></td>
           <td><div class="mini-barra">${VB.barra(a.percentual)}<span class="pequeno muted">${a.concluidas}/${a.total}</span></div></td>
           <td class="col-opc">${a.presencas}</td>
           <td class="col-opc pequeno muted">${VB.quando(a.ultimo_acesso)}</td>
@@ -397,9 +481,9 @@
           <td><a href="${linkWhats(i.telefone)}" target="_blank" rel="noopener">${esc(foneBonito(i.telefone))}</a></td>
           <td class="col-opc">${esc(i.cargo || '')}<br><small class="muted">${esc(i.igreja || '')}</small></td>
           <td class="col-opc pequeno muted">${VB.quando(i.criado_em)}</td>
-          <td>${i.aluno_id ? `<span class="etiqueta ok">Aluno · ${esc(i.aluno_usuario || '')}</span>` : '<span class="etiqueta nova">Nova</span>'}</td>
+          <td>${i.aluno_id ? (i.aluno_cursos ? `<span class="etiqueta ok">No curso · ${esc(i.aluno_usuario || '')}</span>` : `<span class="etiqueta nova">Conta criada · sem curso</span>`) : '<span class="etiqueta nova">Nova</span>'}</td>
           <td><div class="acoes">
-            ${i.aluno_id ? '' : `<button class="btn mini" data-acesso="${i.id}">Criar acesso</button>`}
+            ${i.aluno_id ? (i.aluno_cursos ? `<a class="icone-btn" href="#/p/aluno/${i.aluno_id}" title="Ver aluno" aria-label="Ver aluno">${icone.olho}</a>` : `<button class="btn mini" data-liberar-insc="${i.aluno_id}">Liberar curso</button>`) : `<button class="btn mini" data-acesso="${i.id}">Criar acesso</button>`}
             <button class="icone-btn" data-excluir="${i.id}" title="Excluir inscrição" aria-label="Excluir inscrição">${icone.lixo}</button>
           </div></td></tr>`).join('')}</tbody></table>`
         : `<div class="vazio" style="border:0"><strong>${lista.length ? 'Ninguém encontrado' : 'Nenhuma inscrição ainda'}</strong>${lista.length ? 'Tente outro nome.' : 'Envie o endereço da página de inscrição para os interessados.'}</div>`;
@@ -411,6 +495,11 @@
           if (vale) vale.href = vale.href.replace('https://wa.me/?text=', linkWhats(i.telefone) + '?text=');
           VB.rota();
         }, { nome: i.nome, telefone: foneBonito(i.telefone) });
+      }));
+      $$('[data-liberar-insc]').forEach(b => b.addEventListener('click', async () => {
+        const cursos = (await VB.api('/api/cursos')).filter(c => c.publicado);
+        if (cursos.length !== 1) { location.hash = `#/p/aluno/${b.dataset.liberarInsc}`; return; }
+        try { await VB.api(`/api/admin/alunos/${b.dataset.liberarInsc}/matriculas/${cursos[0].id}`, { method: 'POST' }); VB.toast('Curso liberado. A pessoa recebe uma notificação.'); VB.rota(); } catch (er) { VB.erro(er); }
       }));
       $$('[data-excluir]').forEach(b => b.addEventListener('click', async () => {
         const i = lista.find(x => x.id === Number(b.dataset.excluir));
@@ -464,7 +553,9 @@
         `${al.telefone ? `<a class="btn sec" target="_blank" rel="noopener" href="https://wa.me/55${al.telefone.replace(/\D/g, '').replace(/^55/, '')}">WhatsApp</a>` : ''}<button class="btn sec" id="editar">${icone.lapis}Editar</button>`)}
       ${d.cursos.map(c => `
         <div class="painel" style="margin-bottom:20px">
-          <div class="progresso-curso" style="margin-bottom:1rem">${VB.anel(c.resumo.percentual, 76)}<div><h3 style="margin:0">${esc(c.curso.titulo)}</h3><p class="muted" style="margin:.2rem 0 0">${c.resumo.concluidas} de ${c.resumo.total} aulas concluídas</p></div></div>
+          <div class="progresso-curso" style="margin-bottom:1rem">${VB.anel(c.resumo.percentual, 76)}<div style="flex:1"><h3 style="margin:0">${esc(c.curso.titulo)}</h3><p class="muted" style="margin:.2rem 0 0">${c.resumo.concluidas} de ${c.resumo.total} aulas concluídas</p></div>
+            ${c.liberado ? `<div style="display:grid;gap:.4rem;justify-items:end"><span class="selo verde">Curso liberado</span><button class="btn fantasma mini" data-tirar="${c.curso.id}">Tirar o acesso</button></div>`
+              : `<div style="display:grid;gap:.4rem;justify-items:end"><span class="selo">Sem acesso</span><button class="btn mini" data-liberar="${c.curso.id}">Liberar curso</button></div>`}</div>
           <div class="tabela-wrap"><table class="tabela"><thead><tr><th>Sem.</th><th>Aula</th><th>Checklist</th><th class="col-opc">Questionário</th><th>Encontro</th></tr></thead><tbody>
           ${c.aulas.map(a => `<tr><td class="muted">${a.semana}</td><td><a href="#/p/aula/${a.id}" style="color:inherit">${esc(a.titulo)}</a></td>
             <td><div class="mini-barra">${VB.barra(a.progresso)}<span class="pequeno muted">${a.progresso}%</span></div></td>
@@ -473,6 +564,13 @@
           </tbody></table></div>
         </div>`).join('')}`;
     $('#editar').addEventListener('click', () => formAluno(al, () => VB.rota()));
+    $$('[data-liberar]').forEach(b => b.addEventListener('click', async () => {
+      try { await VB.api(`/api/admin/alunos/${al.id}/matriculas/${b.dataset.liberar}`, { method: 'POST' }); VB.toast(`Curso liberado. ${VB.primeiroNome(al.nome)} recebe uma notificação.`); VB.rota(); } catch (er) { VB.erro(er); }
+    }));
+    $$('[data-tirar]').forEach(b => b.addEventListener('click', async () => {
+      if (!(await VB.confirmar('Tirar o acesso ao curso', `${esc(al.nome)} deixa de ver as aulas deste curso. O progresso fica guardado e volta se você liberar de novo.`, 'Tirar o acesso'))) return;
+      try { await VB.api(`/api/admin/alunos/${al.id}/matriculas/${b.dataset.tirar}`, { method: 'DELETE' }); VB.toast('Acesso ao curso retirado'); VB.rota(); } catch (er) { VB.erro(er); }
+    }));
   });
 
   // ═════════════ CURSOS

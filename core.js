@@ -57,11 +57,16 @@ window.VB = (function () {
     return Math.round((d - h) / 864e5);
   };
   VB.iniciais = nome => String(nome || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('');
-  VB.primeiroNome = nome => String(nome || '').trim().split(/\s+/)[0];
+  // Primeiro nome, pulando títulos como "Pr." e "Dra." ("Pr. Carlos Mendes" → "Carlos")
+  VB.primeiroNome = nome => { const p = String(nome || '').trim().split(/\s+/); return (p.length > 1 && /^(pr|pra|pastor|pastora|dr|dra|ev|pb|presb|diac|miss|rev|bp|ap)\.?$/i.test(p[0]) ? p[1] : p[0]) || ''; };
+  // Iniciais da igreja, sem "de", "da", "do" ("Igreja de Cristo" → "IC")
+  VB.iniciaisIgreja = nome => String(nome || '?').split(/\s+/).filter(w => w.length > 2 || /^[A-ZÁÉÍÓÚ]/.test(w)).slice(0, 2).map(w => w[0].toUpperCase()).join('') || '?';
   // Foto de perfil (ou as iniciais quando a pessoa ainda não pôs foto)
   VB.avatar = (p, cls = '') => p && p.foto
     ? `<img class="avatar foto ${cls}" src="${esc(p.foto)}" alt="" loading="lazy" decoding="async">`
-    : `<span class="avatar ${cls}" aria-hidden="true">${esc(VB.iniciais(p && p.nome))}</span>`;
+    : `<span class="avatar ${cls}" aria-hidden="true">${esc(VB.iniciais(VB.nomeExibicao(p)))}</span>`;
+  // Nome que a pessoa escolheu para aparecer na rede (ou o nome do cadastro)
+  VB.nomeExibicao = u => (u && (u.apelido || u.nome)) || '';
   VB.saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 
   // ── Ícones (traço 1.8)
@@ -222,11 +227,12 @@ window.VB = (function () {
         <section class="login-form">
           <form id="form-login" autocomplete="on">
             <h1>Entrar</h1>
-            <p class="muted">Use o usuário e a senha que o professor entregou a você.</p>
-            <label class="campo"><span>Usuário</span><input class="input" name="usuario" autocomplete="username" autocapitalize="none" required></label>
+            <p class="muted">Entre com o seu e-mail ou com o usuário que o professor entregou, e a sua senha.</p>
+            <label class="campo"><span>E-mail ou usuário</span><input class="input" name="usuario" autocomplete="username" autocapitalize="none" required></label>
             <label class="campo"><span>Senha</span><input class="input" type="password" name="senha" autocomplete="current-password" required></label>
             <button class="btn" type="submit">Entrar</button>
             <p class="erro-msg" id="erro-login"></p>
+            <p class="muted pequeno login-criar">Ainda não tem conta? <a href="/inscricao#inscrever">Faça sua inscrição</a></p>
           </form>
         </section>
       </main>`;
@@ -242,12 +248,31 @@ window.VB = (function () {
       } catch (er) { VB.$('#erro-login').textContent = er.message; b.disabled = false; }
     });
   };
-  VB.sair = async function () { try { await VB.api('/api/logout', { method: 'POST' }); } catch {} VB.me = null; location.hash = ''; VB.telaLogin(); };
+  VB.sair = async function () { const ig = VB.me && VB.me.igreja; try { await VB.api('/api/logout', { method: 'POST' }); } catch {} VB.me = null; VB.aplicarTemaIgreja(null);
+    if (ig) { location.href = '/' + ig.slug; return; }   // membros voltam para a página da própria igreja
+    location.hash = ''; VB.telaLogin(); };
 
   VB.carregarMe = async function () {
     const d = await VB.api('/api/me');
     VB.me = d.usuario; VB.config = d.config;
+    VB.aplicarTemaIgreja(VB.me.igreja);
   };
+  // Cores e nome da igreja (cada igreja escolhe as suas no painel de gestão)
+  const mistura = (hex, alvo, t) => { const a = hex.match(/\w\w/g).map(x => parseInt(x, 16)), b = alvo.match(/\w\w/g).map(x => parseInt(x, 16));
+    return '#' + a.map((v, i) => Math.round(v + (b[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+  VB.aplicarTemaIgreja = function (ig) {
+    let st = document.getElementById('tema-igreja');
+    if (!ig) { if (st) st.remove(); return; }
+    if (!st) { st = document.createElement('style'); st.id = 'tema-igreja'; document.head.appendChild(st); }
+    const p = ig.cor_primaria || '#1E3B2C', d = ig.cor_destaque || '#B48A3F';
+    st.textContent = `:root{--vinho:${p};--vinho-2:${mistura(p, '#ffffff', .22)};--vinho-claro:${mistura(p, '#ffffff', .86)};--ouro:${d};--ouro-claro:${mistura(d, '#ffffff', .82)}}
+html[data-tema="noite"]{--vinho:${mistura(p, '#000000', .15)};--vinho-2:${mistura(p, '#ffffff', .55)};--vinho-claro:${mistura(p, '#121714', .7)};--ouro:${d};--ouro-claro:${mistura(d, '#121714', .75)}}`;
+    const m = document.querySelector('meta[name=theme-color]'); if (m && VB.pref.get('tema', 'dia') !== 'noite') m.content = p;
+  };
+  // Logo e nome que aparecem no topo (a igreja da pessoa, ou o VideiraBook)
+  VB.marcaHtml = () => VB.me && VB.me.igreja
+    ? `${VB.me.igreja.logo ? `<img src="${VB.esc(VB.me.igreja.logo)}" alt="" class="logo-igreja">` : `<span class="logo-igreja logo-letra" aria-hidden="true">${VB.esc(VB.iniciaisIgreja(VB.me.igreja.nome))}</span>`}<span class="marca-nome">${VB.esc(VB.me.igreja.nome)}</span>`
+    : '<img src="/img/logo.svg" alt="">VideiraBook';
 
   // ── Preferências de leitura (ficam salvas só neste aparelho)
   const ESCALAS = [0.9, 1, 1.12, 1.25, 1.4, 1.6];
@@ -262,7 +287,7 @@ window.VB = (function () {
     r.dataset.tema = noite ? 'noite' : 'dia';
     r.style.setProperty('--escala-leitura', ESCALAS[idxEscala()]);
     const m = document.querySelector('meta[name=theme-color]');
-    if (m) m.content = noite ? '#141B16' : '#1E3B2C';
+    if (m) m.content = noite ? '#141B16' : (VB.me && VB.me.igreja && VB.me.igreja.cor_primaria) || '#1E3B2C';
   };
   VB.painelLeitura = function () {
     const rotulo = () => `${Math.round(ESCALAS[idxEscala()] * 100)}%`;

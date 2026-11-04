@@ -12,18 +12,27 @@
       ['avisos', '#/avisos', 'Avisos', icone.sino],
       ['perfil', '#/perfil', 'Perfil', icone.pessoa],
     ];
+    const ig = VB.me.igreja, lider = VB.me.papel === 'pastor';
+    if (ig) {   // quem é de uma igreja: o mural da igreja no lugar da Jornada e dos Avisos da turma
+      links.splice(links.findIndex(l => l[0] === 'avisos'), 1, ['igreja', '#/igreja', 'Igreja', icone.alfinete]);
+      if (lider) links.splice(links.length - 1, 0, ['gestao', '#/g/painel', 'Gestão', icone.painel]);
+    }
     if (VB.me.ia) links.splice(3, 0, ['sermoes', '#/sermoes', 'Sermões', icone.caneta]);
+    if (ig && lider && VB.me.ia) links.splice(links.findIndex(l => l[0] === 'perfil'), 1);   // cabe na barra; o perfil fica no topo
+    // quem ainda não tem curso liberado não vê a Jornada
+    if (!ehProf && !VB.me.cursos) links.splice(links.findIndex(l => l[0] === 'jornada'), 1);
     document.getElementById('app').innerHTML = `
       <header class="topo"><div class="topo-in">
-        <a class="marca" href="#/inicio"><img src="/img/logo.svg" alt="">VideiraBook</a>
+        <a class="marca${ig ? ' marca-igreja' : ''}" href="#/inicio">${VB.marcaHtml()}</a>
         <nav class="nav" aria-label="Principal">
           ${links.map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[2]}</a>`).join('')}
           ${ehProf ? '<a href="#/p/painel">Painel do professor</a>' : ''}
         </nav>
+        <button class="btn-sino" type="button" id="btn-sino" aria-label="Notificações">${icone.sino}<span class="sino-badge" hidden></span></button>
         <button class="btn-leitura" type="button" id="btn-leitura" aria-label="Ajustes de leitura: tamanho das letras e leitura noturna" title="Tamanho das letras e leitura noturna">Aa</button>
         <a class="usuario-chip" href="#/perfil" style="text-decoration:none;color:inherit" aria-label="Meu perfil">
           ${VB.avatar(VB.me)}
-          <span class="nome pequeno">${esc(VB.primeiroNome(VB.me.nome))}</span>
+          <span class="nome pequeno">${esc(VB.primeiroNome(VB.nomeExibicao(VB.me)))}</span>
         </a>
       </div></header>
       <main class="pagina" id="conteudo">${conteudo}</main>
@@ -32,6 +41,8 @@
           .map(l => `<a href="${l[1]}" class="${ativo === l[0] ? 'ativo' : ''}">${l[3]}<span>${l[2]}</span></a>`).join('')}
       </nav>`;
     $('#btn-leitura').addEventListener('click', VB.painelLeitura);
+    const tb = $('.tabbar'); if (tb) tb.style.setProperty('--tabs', tb.children.length);
+    if (VB.rede) VB.rede.ligarSino($('#btn-sino')); else $('#btn-sino').remove();
   }
   VB.molduraAluno = moldura;
 
@@ -47,7 +58,19 @@
     const dias = e ? VB.diasAte(e.data_encontro) : null;
     const quando = dias === 0 ? 'O encontro é hoje' : dias === 1 ? 'O encontro é amanhã' : dias > 1 ? `Faltam ${dias} dias para o encontro` : '';
 
-    const blocoEncontro = e ? `
+    const semCurso = VB.me.papel !== 'professor' && !d.cursos.length;
+    const ig = VB.me.igreja;
+    const blocoEncontro = ig ? `
+      <section class="painel info-igreja" aria-labelledby="ii-tit">
+        <div class="painel-cab"><h3 id="ii-tit">Mural de informações</h3><a href="#/igreja" class="pequeno">Ver tudo</a></div>
+        <div id="ii-lista"><div class="carregando mini"></div></div>
+      </section>` : semCurso ? `
+      <section class="painel sem-curso" aria-labelledby="sc-tit">
+        <h3 id="sc-tit">Seus cursos</h3>
+        <p class="muted" style="margin:0">Você ainda não está em nenhum curso. Quando o professor liberar o seu, ele aparece aqui e você recebe uma notificação.</p>
+        <p class="muted pequeno" style="margin:.8rem 0 0">Enquanto isso, aproveite o mural da turma, o versículo do dia e as Bíblias.</p>
+        <a class="btn sec mini" href="#/biblia" style="margin-top:1rem">${icone.livro}Abrir a Bíblia</a>
+      </section>` : e ? `
       <section class="encontro" aria-labelledby="enc-tit">
         ${VB.arteCacho}
         ${quando ? `<div class="contagem">${quando}</div>` : ''}
@@ -95,16 +118,61 @@
     // Início: o mural da turma (status, publicações) no centro; encontro, progresso e avisos ao lado
     $('#conteudo').innerHTML = `
       <div class="saudacao saudacao-rede">
-        <div><h1>${VB.saudacao()}, ${esc(VB.primeiroNome(VB.me.nome))}</h1>
-        <p>${esc(cfg.nome_turma || '')}${cfg.dia_semana ? ` · encontros às ${VB.DIAS[Number(cfg.dia_semana)].toLowerCase()}s` : ''}</p></div>
+        <div><h1>${VB.saudacao()}, ${esc(VB.primeiroNome(VB.nomeExibicao(VB.me)))}</h1>
+        ${ig ? `<p>${esc(ig.nome)}${ig.cidade ? ` · ${esc(ig.cidade)}` : ''}</p>` : semCurso ? '' : `<p>${esc(cfg.nome_turma || '')}${cfg.dia_semana ? ` · encontros às ${VB.DIAS[Number(cfg.dia_semana)].toLowerCase()}s` : ''}</p>`}</div>
       </div>
       <div id="status-topo"></div>
       <div class="inicio-grade inicio-rede">
         <aside class="inicio-lado" aria-label="Seu estudo">${blocoEncontro}${blocoContinuar ? `<div style="margin-top:20px">${blocoContinuar}</div>` : ''}
-          <div class="so-largo">${blocoProgresso ? `<div style="margin-top:20px">${blocoProgresso}</div>` : ''}<div style="margin-top:20px">${blocoAvisos}</div></div></aside>
-        <section class="inicio-mural" id="inicio-mural" aria-label="Mural da turma"></section>
+          <div id="versiculo-dia" style="margin-top:20px"></div>
+          <div class="so-largo">${blocoProgresso ? `<div style="margin-top:20px">${blocoProgresso}</div>` : ''}${ig ? '' : `<div style="margin-top:20px">${blocoAvisos}</div>`}</div></aside>
+        <section class="inicio-mural" id="inicio-mural" aria-label="${ig ? 'Mural da igreja' : 'Mural da turma'}"></section>
       </div>`;
-    if (VB.rede) VB.rede.montar($('#inicio-mural'), $('#status-topo'));
+    if (VB.rede) { VB.rede.montar($('#inicio-mural'), $('#status-topo')); VB.rede.versiculoDoDia($('#versiculo-dia')); }
+    if (ig) VB.api('/api/rede/informativos').then(lista => {
+      const el = $('#ii-lista'); if (!el) return;
+      el.innerHTML = lista.length ? `<ul class="ii-itens">${lista.slice(0, 4).map(p => `<li><a href="#/post/${p.id}">
+          ${p.imagens.length ? `<img src="${esc(p.imagens[0].url)}" alt="" loading="lazy">` : `<span class="ii-ico" aria-hidden="true">${icone.alfinete}</span>`}
+          <span><strong>${esc((p.texto || 'Cartaz').split('\n')[0].slice(0, 90))}</strong><time>${VB.quando(p.criado_em)}</time></span></a></li>`).join('')}</ul>`
+        : `<p class="muted pequeno" style="margin:0">${VB.me.papel === 'pastor' ? 'Ao publicar no mural, marque “Informativo da igreja” para o aviso ficar aqui.' : 'Os avisos e cartazes da igreja aparecem aqui.'}</p>`;
+    }).catch(() => {});
+  });
+
+  // ── Página da igreja: informações, mural de informações, declaração de fé, arquivos e contato
+  VB.registrar(/^\/igreja$/, 'todos', async () => {
+    if (!VB.me.igreja) { location.hash = '#/inicio'; return; }
+    moldura('igreja', '<div class="carregando"></div>');
+    const d = await VB.api('/api/igreja');
+    document.title = `${d.nome} · VideiraBook`;
+    const kb = n => n > 1048576 ? `${(n / 1048576).toFixed(1).replace('.', ',')} MB` : `${Math.max(1, Math.round(n / 1024))} KB`;
+    const zap = (d.telefone || '').replace(/\D/g, '');
+    $('#conteudo').innerHTML = `
+      <section class="igreja-capa">
+        ${d.logo ? `<img src="${esc(d.logo)}" alt="Logo da ${esc(d.nome)}" class="igreja-capa-logo">` : `<span class="igreja-capa-logo logo-letra" aria-hidden="true">${esc(VB.iniciaisIgreja(d.nome))}</span>`}
+        <div><h1>${esc(d.nome)}</h1>${d.cidade ? `<p>${esc(d.cidade)}</p>` : ''}</div>
+        ${d.sou_admin ? `<a class="btn sec mini" href="#/g/igreja">${icone.lapis}Editar</a>` : ''}
+      </section>
+      <div class="igreja-grade">
+        <div>
+          ${d.sobre ? `<div class="painel"><h3>Quem somos</h3><div class="leitura">${esc(d.sobre).replace(/\n/g, '<br>')}</div></div>` : ''}
+          <h2 class="igreja-sec">Mural de informações</h2>
+          <div id="igreja-infos"><div class="carregando"></div></div>
+        </div>
+        <aside>
+          ${d.declaracao ? `<div class="painel"><h3>Declaração de fé</h3><details class="declaracao"><summary>Ler a declaração de fé</summary><div class="leitura">${esc(d.declaracao).replace(/\n/g, '<br>')}</div></details></div>` : ''}
+          <div class="painel"><h3>Arquivos</h3>
+            ${d.arquivos.length ? `<ul class="igreja-arqs">${d.arquivos.map(a => `<li><a href="${esc(a.url)}" target="_blank" rel="noopener">${icone.pdf}<span>${esc(a.titulo)}<small>PDF · ${kb(a.tamanho || 0)}</small></span></a></li>`).join('')}</ul>`
+              : '<p class="muted pequeno" style="margin:0">Nenhum arquivo publicado.</p>'}</div>
+          ${d.telefone || d.email || d.endereco || d.pix ? `<div class="painel"><h3>Contato</h3><dl class="igreja-contato">
+            ${d.endereco ? `<dt>Endereço</dt><dd>${esc(d.endereco)}</dd>` : ''}
+            ${d.telefone ? `<dt>Telefone</dt><dd>${zap.length >= 10 ? `<a href="https://wa.me/${zap.length <= 11 ? '55' + zap : zap}" target="_blank" rel="noopener">${esc(d.telefone)}</a>` : esc(d.telefone)}</dd>` : ''}
+            ${d.email ? `<dt>E-mail</dt><dd><a href="mailto:${esc(d.email)}">${esc(d.email)}</a></dd>` : ''}
+            ${d.pix ? `<dt>Pix para dízimos e ofertas</dt><dd><code>${esc(d.pix)}</code> <button type="button" class="link-btn" id="copiar-pix">Copiar</button></dd>` : ''}
+          </dl></div>` : ''}
+        </aside>
+      </div>`;
+    const cp = $('#copiar-pix'); if (cp) cp.addEventListener('click', () => { navigator.clipboard.writeText(d.pix).then(() => VB.toast('Chave Pix copiada')).catch(() => VB.toast('Não foi possível copiar', true)); });
+    if (VB.rede) VB.rede.informativos($('#igreja-infos'));
   });
 
   function avisoHtml(a) {
@@ -126,7 +194,7 @@
           <h3>${esc(c.titulo)}</h3>
           <div class="meta"><span>${c.resumo.total} aulas</span><span>${c.modulos} módulos</span></div>
           <div class="estado">${VB.anel(c.resumo.percentual, 62)}</div>
-        </a>`).join('') : '<div class="vazio"><strong>Nenhum estudo disponível</strong>O professor ainda não publicou um curso.</div>'}`;
+        </a>`).join('') : (VB.me.papel !== 'professor' && !VB.me.cursos ? '<div class="vazio"><strong>Nenhum curso liberado para você ainda</strong>Quando o professor liberar, o curso aparece aqui e você recebe uma notificação.</div>' : '<div class="vazio"><strong>Nenhum estudo disponível</strong>O professor ainda não publicou um curso.</div>')}`;
   });
   VB.registrar(/^\/curso\/(\d+)$/, 'todos', id => { moldura('jornada', '<div class="carregando"></div>'); return trilha(id); });
 
@@ -752,13 +820,14 @@
         <label class="campo"><span>Nova senha</span><input class="input" type="password" name="nova" minlength="6" autocomplete="new-password" required><small>Pelo menos 6 caracteres.</small></label>
         <button class="btn" type="submit">Salvar nova senha</button>
       </form>
+      <div class="painel" id="perfil-notif" style="max-width:460px;margin-top:16px"></div>
       <div class="painel" style="max-width:460px;margin-top:16px">
         <h3>Leitura</h3>
         <p class="muted pequeno" style="margin:.2rem 0 .9rem">Aumente as letras das aulas ou ative a leitura noturna. O ajuste fica salvo neste aparelho.</p>
         <button class="btn sec" type="button" id="abrir-leitura">Ajustar leitura</button>
       </div></div>`;
     $('#abrir-leitura').addEventListener('click', VB.painelLeitura);
-    if (VB.rede) VB.rede.blocoFoto($('#perfil-foto')); else $('#perfil-foto').remove();
+    if (VB.rede) { VB.rede.blocoFoto($('#perfil-foto')); VB.rede.blocoNotificacoes($('#perfil-notif')); } else { $('#perfil-foto').remove(); $('#perfil-notif').remove(); }
     $('#sair').addEventListener('click', VB.sair);
     $('#form-senha').addEventListener('submit', async e => {
       e.preventDefault();

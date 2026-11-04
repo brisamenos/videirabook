@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const multer = require('multer');
 const { db, getConfig, setConfig, recalcularDatas, checklistPadrao, iso, UPLOAD_DIR } = require('./db');
+const ACESSO = require('./acesso');   // matrícula por curso, notificações, versículo do dia
 
 const app = express();
 app.set('trust proxy', 1);   // EasyPanel fica na frente: usa o IP real de quem acessa
@@ -31,6 +32,7 @@ const ESTATICOS = {
   '/js/sermao.js': 'sermao.js',
   '/js/estudo-leitor.js': 'estudo-leitor.js',
   '/js/rede.js': 'rede.js',
+  '/js/gestao.js': 'gestao.js',
   '/img/logo.svg': 'logo.svg',
   '/fonts/newsreader-latin-opsz-normal.woff2': 'newsreader-latin-opsz-normal.woff2',
   '/fonts/newsreader-latin-opsz-italic.woff2': 'newsreader-latin-opsz-italic.woff2',
@@ -86,10 +88,28 @@ app.post('/api/inscricao', (req, res) => {
   if (telefone.length < 10 || telefone.length > 13) return res.status(400).json({ erro: 'Informe o WhatsApp com DDD.', campo: 'telefone' });
   if (!cargo) return res.status(400).json({ erro: 'Diga qual é o seu cargo ou função.', campo: 'cargo' });
   if (igreja.length < 2) return res.status(400).json({ erro: 'Informe o nome da sua igreja.', campo: 'igreja' });
-  if (db.prepare('SELECT 1 FROM inscricoes WHERE email = ? OR telefone = ?').get(email, telefone))
-    return res.json({ ok: true, repetida: true });
-  db.prepare('INSERT INTO inscricoes (nome, email, telefone, cargo, igreja) VALUES (?,?,?,?,?)').run(nome, email, telefone, cargo, igreja);
-  res.json({ ok: true });
+  // A inscrição cria a conta na hora: mural, versículo do dia e Bíblias. O curso abre quando o professor liberar.
+  const senha = String(b.senha || '');
+  if (senha.length < 6) return res.status(400).json({ erro: 'Crie uma senha com pelo menos 6 caracteres.', campo: 'senha' });
+  if (db.prepare('SELECT 1 FROM usuarios WHERE email = ? COLLATE NOCASE').get(email))
+    return res.status(400).json({ erro: 'Já existe uma conta com este e-mail. Entre no app com o seu e-mail e senha.', campo: 'email', conta: true });
+  const antiga = db.prepare('SELECT i.aluno_id, u.usuario FROM inscricoes i JOIN usuarios u ON u.id = i.aluno_id WHERE i.email = ? OR i.telefone = ?').get(email, telefone);
+  if (antiga) return res.status(400).json({ erro: `Você já tem acesso ao app com o usuário "${antiga.usuario}". Entre com ele e sua senha.`, campo: 'email', conta: true });
+  const base = (email.split('@')[0] || nome.split(' ')[0]).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9._-]/g, '').slice(0, 30) || 'aluno';
+  let usuario = base.length >= 3 ? base : base + 'vb', n = 1;
+  while (db.prepare('SELECT 1 FROM usuarios WHERE usuario = ?').get(usuario)) usuario = `${base}${++n}`;
+  const uid = db.transaction(() => {
+    const id = db.prepare("INSERT INTO usuarios (nome, usuario, telefone, senha_hash, papel, email, origem) VALUES (?,?,?,?, 'aluno', ?, 'inscricao')")
+      .run(nome, usuario, telefone, bcrypt.hashSync(senha, 10), email).lastInsertRowid;
+    const ja = db.prepare('SELECT id FROM inscricoes WHERE email = ? OR telefone = ?').get(email, telefone);
+    if (ja) db.prepare('UPDATE inscricoes SET aluno_id = ? WHERE id = ?').run(id, ja.id);
+    else db.prepare('INSERT INTO inscricoes (nome, email, telefone, cargo, igreja, aluno_id) VALUES (?,?,?,?,?,?)').run(nome, email, telefone, cargo, igreja, id);
+    return id;
+  })();
+  emitirToken(res, { id: uid, papel: 'aluno' });
+  db.prepare("UPDATE usuarios SET ultimo_acesso = datetime('now','localtime') WHERE id = ?").run(uid);
+  ACESSO.notificar(db.prepare("SELECT id FROM usuarios WHERE papel = 'professor' ORDER BY id LIMIT 1").get()?.id, { tipo: 'inscricao', texto: `${nome} criou uma conta pela página de inscrição. Libere o curso quando quiser.`, link: '#/p/inscricoes', atorId: uid, titulo: 'Nova inscrição' });
+  res.json({ ok: true, conta: true, usuario });
 });
 
 // ── Upload
@@ -121,7 +141,7 @@ function emitirToken(res, u) {
 function auth(req, res, next) {
   try {
     const dados = jwt.verify(req.cookies.vb_token || '', SECRET);
-    const u = db.prepare('SELECT id, nome, usuario, telefone, papel, ativo, foto FROM usuarios WHERE id = ?').get(dados.id);
+    const u = db.prepare('SELECT id, nome, usuario, telefone, papel, ativo, foto, apelido, arroba, igreja_id FROM usuarios WHERE id = ?').get(dados.id);
     if (!u || !u.ativo) return res.status(401).json({ erro: 'Sessão encerrada. Entre novamente.' });
     req.user = u;
     next();
@@ -139,9 +159,11 @@ const h = fn => (req, res, next) => {
 
 app.post('/api/login', h((req, res) => {
   const { usuario, senha } = req.body || {};
-  const u = db.prepare('SELECT * FROM usuarios WHERE usuario = ?').get(String(usuario || '').trim());
-  if (!u || !bcrypt.compareSync(String(senha || ''), u.senha_hash)) return res.status(400).json({ erro: 'Usuário ou senha incorretos.' });
-  if (!u.ativo) return res.status(403).json({ erro: 'Seu acesso está desativado. Fale com o professor.' });
+  const ident = String(usuario || '').trim();
+  const u = db.prepare('SELECT * FROM usuarios WHERE usuario = ?').get(ident) || (ident.includes('@') ? db.prepare('SELECT * FROM usuarios WHERE email = ? COLLATE NOCASE').get(ident) : null);
+  if (!u || !bcrypt.compareSync(String(senha || ''), u.senha_hash)) return res.status(400).json({ erro: 'Usuário (ou e-mail) ou senha incorretos.' });
+  if (!u.ativo) return res.status(403).json({ erro: u.igreja_id ? 'Seu acesso está desativado. Fale com a liderança da sua igreja.' : 'Seu acesso está desativado. Fale com o professor.' });
+  if (u.igreja_id) { const ig = db.prepare('SELECT ativo FROM igrejas WHERE id = ?').get(u.igreja_id); if (!ig || !ig.ativo) return res.status(403).json({ erro: 'O acesso desta igreja está suspenso no momento.' }); }
   db.prepare("UPDATE usuarios SET ultimo_acesso = datetime('now','localtime') WHERE id = ?").run(u.id);
   emitirToken(res, u);
   res.json({ ok: true, papel: u.papel });
@@ -151,7 +173,7 @@ app.post('/api/logout', (req, res) => { res.clearCookie('vb_token'); res.json({ 
 app.get('/api/me', auth, h((req, res) => {
   const cfg = getConfig(); for (const k of Object.keys(cfg)) if (k[0] === '_') delete cfg[k];
   const SR = require('./sermoes');
-  res.json({ usuario: { ...req.user, foto: req.user.foto ? `/arquivos/${encodeURIComponent(req.user.foto)}` : null, ia: SR.podeIA(req.user), ia_motivo: SR.motivoIA(req.user), estudo: require('./estudo').podeEstudo(req.user) }, config: cfg });
+  res.json({ usuario: { ...req.user, cursos: ACESSO.totalMatriculas(req.user), foto: req.user.foto ? `/arquivos/${encodeURIComponent(req.user.foto)}` : null, ia: SR.podeIA(req.user), ia_motivo: SR.motivoIA(req.user), estudo: require('./estudo').podeEstudo(req.user), igreja: req.user.igreja_id ? require('./igrejas').resumoIgreja(require('./igrejas').igrejaPorId(req.user.igreja_id)) : null }, config: cfg });
 }));
 app.put('/api/me/senha', auth, h((req, res) => {
   const { atual, nova } = req.body || {};
@@ -240,6 +262,7 @@ function podeAcessar(aulaId, user) {
   const a = aulaComCurso(aulaId);
   if (!a) return { erro: 404 };
   if (user.papel === 'professor') return { aula: a };
+  if (!ACESSO.temMatricula(user, a.curso_id)) return { erro: 403, motivo: 'Este curso ainda não foi liberado para você.' };
   const v = visaoCurso(a.curso_id, user);
   const item = v.aulas.find(x => x.id === a.id);
   if (!item || !v.curso.publicado) return { erro: 404 };
@@ -250,7 +273,7 @@ function podeAcessar(aulaId, user) {
 // ── ALUNO (também usado pelo professor no modo "ver como aluno")
 app.get('/api/cursos', auth, h((req, res) => {
   const ehProf = req.user.papel === 'professor';
-  const cursos = db.prepare(`SELECT * FROM cursos ${ehProf ? '' : 'WHERE publicado = 1'} ORDER BY ordem, id`).all();
+  const cursos = db.prepare(`SELECT * FROM cursos ${ehProf ? '' : 'WHERE publicado = 1'} ORDER BY ordem, id`).all().filter(c => ACESSO.temMatricula(req.user, c.id));
   res.json(cursos.map(c => {
     const v = visaoCurso(c.id, req.user);
     const proxima = v.aulas.find(a => a.status === 'disponivel') || null;
@@ -261,12 +284,13 @@ app.get('/api/cursos', auth, h((req, res) => {
 app.get('/api/cursos/:id', auth, h((req, res) => {
   const v = visaoCurso(Number(req.params.id), req.user);
   if (!v || (!v.curso.publicado && req.user.papel !== 'professor')) return res.status(404).json({ erro: 'Curso não encontrado.' });
+  if (!ACESSO.temMatricula(req.user, v.curso.id)) return res.status(403).json({ erro: 'Este curso ainda não foi liberado para você. Quando o professor liberar, você recebe uma notificação.' });
   res.json(v);
 }));
 
 app.get('/api/inicio', auth, h((req, res) => {
   const cfg = getConfig(); for (const k of Object.keys(cfg)) if (k[0] === '_') delete cfg[k];
-  const cursos = db.prepare('SELECT id FROM cursos WHERE publicado = 1 ORDER BY ordem, id').all();
+  const cursos = db.prepare('SELECT id FROM cursos WHERE publicado = 1 ORDER BY ordem, id').all().filter(c => ACESSO.temMatricula(req.user, c.id));
   const visoes = cursos.map(c => visaoCurso(c.id, req.user));
   const hj = hoje();
   // Próximo encontro (a partir de hoje)
@@ -278,7 +302,7 @@ app.get('/api/inicio', auth, h((req, res) => {
   // Aula para continuar
   let continuar = null;
   for (const v of visoes) { const a = v.aulas.find(x => x.status === 'disponivel'); if (a) { continuar = { ...a, curso_id: v.curso.id, curso_titulo: v.curso.titulo }; break; } }
-  const avisos = db.prepare('SELECT * FROM avisos ORDER BY fixado DESC, id DESC LIMIT 5').all();
+  const avisos = req.user.igreja_id ? [] : db.prepare('SELECT * FROM avisos ORDER BY fixado DESC, id DESC LIMIT 5').all();
   res.json({
     config: cfg, proximoEncontro, continuar, avisos,
     cursos: visoes.map(v => ({ id: v.curso.id, titulo: v.curso.titulo, descricao: v.curso.descricao, resumo: v.resumo,
@@ -361,6 +385,7 @@ app.put('/api/aulas/:id/anotacao', auth, h((req, res) => {
 }));
 
 app.get('/api/avisos', auth, h((req, res) => {
+  if (req.user.igreja_id) return res.json([]);
   res.json(db.prepare('SELECT * FROM avisos ORDER BY fixado DESC, id DESC').all());
 }));
 
@@ -369,7 +394,7 @@ const P = express.Router();
 P.use(auth, soProfessor);
 
 P.get('/painel', h((req, res) => {
-  const alunos = db.prepare("SELECT id, nome, usuario, ativo, ultimo_acesso FROM usuarios WHERE papel = 'aluno' ORDER BY nome").all();
+  const alunos = db.prepare("SELECT id, nome, usuario, ativo, ultimo_acesso FROM usuarios WHERE papel = 'aluno' AND igreja_id IS NULL ORDER BY nome").all();
   const cursos = db.prepare('SELECT * FROM cursos ORDER BY ordem, id').all();
   const hj = hoje();
   const visCursos = cursos.map(c => {
@@ -381,7 +406,7 @@ P.get('/painel', h((req, res) => {
   });
   const atividade = db.prepare(`SELECT u.nome, ci.texto, a.titulo AS aula, a.id AS aula_id, cf.feito_em FROM checklist_feitos cf
     JOIN usuarios u ON u.id = cf.usuario_id JOIN checklist_itens ci ON ci.id = cf.item_id JOIN aulas a ON a.id = ci.aula_id
-    WHERE u.papel = 'aluno' ORDER BY cf.feito_em DESC LIMIT 12`).all();
+    WHERE u.papel = 'aluno' AND u.igreja_id IS NULL ORDER BY cf.feito_em DESC LIMIT 12`).all();
   res.json({
     alunos: { total: alunos.length, ativos: alunos.filter(a => a.ativo).length,
       acessaram7d: alunos.filter(a => a.ultimo_acesso && a.ultimo_acesso >= somaDias(hj, -7)).length },
@@ -391,13 +416,14 @@ P.get('/painel', h((req, res) => {
 
 // Alunos
 P.get('/alunos', h((req, res) => {
-  const alunos = db.prepare("SELECT id, nome, usuario, telefone, ativo, criado_em, ultimo_acesso FROM usuarios WHERE papel = 'aluno' ORDER BY nome").all();
+  const alunos = db.prepare("SELECT id, nome, usuario, telefone, email, origem, ativo, criado_em, ultimo_acesso FROM usuarios WHERE papel = 'aluno' AND igreja_id IS NULL ORDER BY nome").all();
+  const mats = {}; for (const m of db.prepare('SELECT usuario_id, curso_id FROM matriculas').all()) (mats[m.usuario_id] = mats[m.usuario_id] || []).push(m.curso_id);
   const cursos = db.prepare('SELECT id FROM cursos ORDER BY ordem, id').all();
   res.json(alunos.map(al => {
     const resumos = cursos.map(c => visaoCurso(c.id, { id: al.id, papel: 'aluno' }).resumo);
     const total = resumos.reduce((s, r) => s + r.total, 0), conc = resumos.reduce((s, r) => s + r.concluidas, 0);
     const presencas = db.prepare('SELECT COUNT(*) n FROM presencas WHERE usuario_id = ? AND presente = 1').get(al.id).n;
-    return { ...al, concluidas: conc, total, percentual: total ? Math.round(conc / total * 100) : 0, presencas };
+    return { ...al, cursos_liberados: mats[al.id] || [], concluidas: conc, total, percentual: total ? Math.round(conc / total * 100) : 0, presencas };
   }));
 }));
 function validarUsuario(usuario) {
@@ -411,6 +437,8 @@ P.post('/alunos', h((req, res) => {
   if (db.prepare('SELECT 1 FROM usuarios WHERE usuario = ?').get(usuario)) return res.status(400).json({ erro: 'Já existe alguém com esse usuário.' });
   const id = db.prepare("INSERT INTO usuarios (nome, usuario, telefone, senha_hash, papel) VALUES (?,?,?,?, 'aluno')")
     .run(String(nome).trim(), String(usuario).trim().toLowerCase(), telefone || null, bcrypt.hashSync(String(senha), 10)).lastInsertRowid;
+  // aluno criado pelo professor já entra com o curso liberado (a menos que o professor desmarque)
+  if (req.body.liberar_curso !== false) db.prepare('INSERT OR IGNORE INTO matriculas (usuario_id, curso_id) SELECT ?, id FROM cursos').run(id);
   res.json({ ok: true, id });
 }));
 P.put('/alunos/:id', h((req, res) => {
@@ -434,14 +462,14 @@ P.delete('/alunos/:id', h((req, res) => {
   res.json({ ok: true });
 }));
 P.get('/alunos/:id', h((req, res) => {
-  const al = db.prepare("SELECT id, nome, usuario, telefone, ativo, criado_em, ultimo_acesso FROM usuarios WHERE id = ? AND papel = 'aluno'").get(Number(req.params.id));
+  const al = db.prepare("SELECT id, nome, usuario, telefone, email, origem, ativo, criado_em, ultimo_acesso FROM usuarios WHERE id = ? AND papel = 'aluno'").get(Number(req.params.id));
   if (!al) return res.status(404).json({ erro: 'Aluno não encontrado.' });
   const cursos = db.prepare('SELECT id FROM cursos ORDER BY ordem, id').all().map(c => {
     const v = visaoCurso(c.id, { id: al.id, papel: 'aluno' });
     const quiz = {};
     for (const q of db.prepare('SELECT aula_id, acertos, total FROM quiz_respostas WHERE usuario_id = ?').all(al.id)) quiz[q.aula_id] = q;
     const pres = new Set(db.prepare('SELECT aula_id FROM presencas WHERE usuario_id = ? AND presente = 1').all(al.id).map(x => x.aula_id));
-    return { curso: v.curso, resumo: v.resumo, aulas: v.aulas.map(a => ({ id: a.id, semana: a.semana, titulo: a.titulo, status: a.status, progresso: a.progresso, concluida: a.concluida, quiz: quiz[a.id] || null, presente: pres.has(a.id), data_encontro: a.data_encontro })) };
+    return { curso: v.curso, liberado: ACESSO.temMatricula({ id: al.id, papel: 'aluno' }, c.id), resumo: v.resumo, aulas: v.aulas.map(a => ({ id: a.id, semana: a.semana, titulo: a.titulo, status: a.status, progresso: a.progresso, concluida: a.concluida, quiz: quiz[a.id] || null, presente: pres.has(a.id), data_encontro: a.data_encontro })) };
   });
   res.json({ aluno: al, cursos });
 }));
@@ -457,7 +485,7 @@ P.put('/config', h((req, res) => {
 
 // Inscrições recebidas
 P.get('/inscricoes', h((req, res) => {
-  res.json(db.prepare(`SELECT i.*, u.usuario AS aluno_usuario FROM inscricoes i LEFT JOIN usuarios u ON u.id = i.aluno_id
+  res.json(db.prepare(`SELECT i.*, u.usuario AS aluno_usuario, (SELECT COUNT(*) FROM matriculas m WHERE m.usuario_id = i.aluno_id) AS aluno_cursos FROM inscricoes i LEFT JOIN usuarios u ON u.id = i.aluno_id
     ORDER BY i.aluno_id IS NOT NULL, i.id DESC`).all());
 }));
 P.put('/inscricoes/:id', h((req, res) => {
@@ -572,7 +600,7 @@ P.get('/aulas/:id', h((req, res) => {
   const materiais = db.prepare('SELECT * FROM materiais WHERE aula_id = ? ORDER BY pre_estudo DESC, ordem, id').all(a.id);
   const checklist = db.prepare('SELECT * FROM checklist_itens WHERE aula_id = ? ORDER BY ordem, id').all(a.id);
   const quiz = db.prepare('SELECT * FROM quiz_perguntas WHERE aula_id = ? ORDER BY ordem, id').all(a.id).map(q => ({ ...q, opcoes: JSON.parse(q.opcoes) }));
-  const alunos = db.prepare("SELECT id, nome FROM usuarios WHERE papel = 'aluno' AND ativo = 1 ORDER BY nome").all();
+  const alunos = db.prepare("SELECT id, nome FROM usuarios WHERE papel = 'aluno' AND ativo = 1 AND igreja_id IS NULL ORDER BY nome").all();
   const pres = new Set(db.prepare('SELECT usuario_id FROM presencas WHERE aula_id = ? AND presente = 1').all(a.id).map(x => x.usuario_id));
   const itensIds = checklist.map(c => c.id);
   const progresso = alunos.map(al => {
@@ -734,6 +762,7 @@ P.post('/avisos', h((req, res) => {
   const { titulo, texto, fixado } = req.body || {};
   if (!titulo) return res.status(400).json({ erro: 'Informe o título do aviso.' });
   db.prepare('INSERT INTO avisos (titulo, texto, fixado) VALUES (?,?,?)').run(titulo, texto || '', fixado ? 1 : 0);
+  ACESSO.notificarTodos({ tipo: 'aviso', texto: `Novo aviso: ${String(titulo).slice(0, 120)}`, link: '#/avisos', atorId: req.user.id, titulo: 'Aviso do professor' }, req.user.id);
   res.json({ ok: true });
 }));
 P.put('/avisos/:id', h((req, res) => {
@@ -886,6 +915,9 @@ SERMOES(app, P, auth, h);
 // ── Bíblia de estudo e grifos
 require('./estudo')(app, P, auth, h, upload);
 require('./mural')(app, P, auth, h);
+ACESSO(app, P, auth, h);
+// ── Igrejas (cada uma com endereço próprio, rol de membros, financeiro e mural separado)
+require('./igrejas')(app, P, auth, h, emitirToken);
 
 // O site Bíblia Online deixa ser aberto dentro de outra página? (verificado 1x por dia)
 let embutir = { permitido: null, em: 0 };

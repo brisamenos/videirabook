@@ -18,6 +18,7 @@ function temCapa(r) { return !!(capaEnviada(r.cod) || capaDoModulo(r)); }
 function podeEstudo(u) {
   if (!u) return false;
   if (u.papel === 'professor') return true;
+  if (u.igreja_id) { const ig = db.prepare('SELECT estudo_ativo FROM igrejas WHERE id = ?').get(u.igreja_id); return !!(ig && ig.estudo_ativo); }
   const r = db.prepare('SELECT pode_estudo FROM usuarios WHERE id = ?').get(u.id);
   return !!(r && r.pode_estudo);
 }
@@ -159,7 +160,7 @@ module.exports = function (app, P, auth, h, upload) {
       modulos: db.prepare("SELECT * FROM biblioteca WHERE tipo = 'comentario' ORDER BY estudo DESC, ordem, id").all()
         .map(m => ({ cod: m.cod, sigla: m.sigla, titulo: m.titulo, estudo: m.estudo, ativo: m.ativo, base: m.estudo ? (BIB.baseDoEstudo(m) || {}).cod || '' : '', capa: m.estudo ? temCapa(m) : false, capaEnviada: !!capaEnviada(m.cod) })),
       biblias: BIB.listar('biblia').map(b => ({ cod: b.cod, sigla: b.sigla, titulo: b.titulo })),
-      usuarios: db.prepare("SELECT id, nome, usuario, pode_estudo, ativo FROM usuarios WHERE papel = 'aluno' ORDER BY nome").all(),
+      usuarios: db.prepare("SELECT id, nome, usuario, pode_estudo, ativo FROM usuarios WHERE papel = 'aluno' AND igreja_id IS NULL ORDER BY nome").all(),
     });
   }));
   P.put('/estudo/usuarios/:id', h((req, res) => {

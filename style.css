@@ -470,7 +470,7 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: .93rem; }
   .topo-in { padding: 0 16px; gap: .6rem; }
   .btn-leitura { margin-left: auto; }
   .tabbar {
-    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
+    display: grid; grid-template-columns: repeat(var(--tabs, 5), 1fr); position: fixed; bottom: 0; left: 0; right: 0; z-index: 40;
     background: rgba(251,251,248,.96); backdrop-filter: blur(10px); border-top: 1px solid var(--linha-2); padding-bottom: env(safe-area-inset-bottom);
   }
   .tabbar a { display: grid; justify-items: center; gap: 2px; padding: 8px 0 7px; font-size: .72rem; color: var(--fraco); text-decoration: none; font-weight: 600; }
@@ -1196,7 +1196,8 @@ body.sem-rolagem { overflow: hidden; }
 .post-cab .avatar { width: 42px; height: 42px; }
 .post-quem { flex: 1; min-width: 0; line-height: 1.25; }
 .post-quem strong { font-weight: 650; }
-.post-quem time { display: block; font-size: .8rem; color: var(--fraco); margin-top: 1px; }
+.post-sub { display: block; font-size: .8rem; color: var(--fraco); margin-top: 1px; }
+.post-sub .arroba { color: var(--suave); font-weight: 500; }
 .rede-selo { display: inline-block; margin-left: .4rem; padding: 1px 7px; border-radius: 999px; background: var(--ouro-claro); color: #7A5A1E; font-size: .68rem; font-weight: 700; vertical-align: 2px; letter-spacing: .02em; }
 html[data-tema="noite"] .rede-selo { color: #E2C48A; }
 .post-menu { border: 0; background: transparent; }
@@ -1372,4 +1373,243 @@ html[data-tema="noite"] .coment-form textarea { background: #141A16; }
   .inicio-rede .encontro .btn { min-height: 38px; padding: .4rem .95rem; font-size: .9rem; }
   .inicio-rede .contagem { margin-bottom: .7rem; }
   .perfil-foto { align-items: flex-start; }
+}
+
+.pf-form { margin-top: 1.2rem; padding-top: 1.1rem; border-top: 1px solid var(--linha-2); }
+.campo-arroba { position: relative; }
+.campo-arroba b { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--suave); font-weight: 600; pointer-events: none; }
+.campo-arroba .input { padding-left: 32px; }
+
+/* ───────── Notificações (sino no topo) */
+.btn-sino { position: relative; width: 38px; height: 36px; border-radius: 99px; border: 1px solid var(--linha); background: var(--papel); color: var(--tinta); display: inline-grid; place-items: center; cursor: pointer; flex: none; }
+.btn-sino:hover { border-color: var(--fraco); }
+.btn-sino svg { width: 19px; height: 19px; }
+.sino-badge { position: absolute; top: -5px; right: -6px; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 99px; background: var(--perigo); color: #fff; font: 700 .7rem/19px var(--sans); text-align: center; border: 2px solid var(--papel); box-sizing: content-box; }
+html[data-tema="noite"] .sino-badge { color: #1A1A1A; }
+@media (max-width: 720px) { .btn-sino { margin-left: auto; } .btn-sino ~ .btn-leitura { margin-left: 0; } }
+.notif-painel { position: fixed; z-index: 95; width: 390px; max-height: min(620px, calc(100vh - 90px)); display: flex; flex-direction: column; background: var(--papel); border: 1px solid var(--linha-2); border-radius: 18px; box-shadow: 0 24px 60px -20px rgba(20, 25, 21, .45); overflow: hidden; animation: flut-entra .14s ease-out; }
+.np-cab { display: flex; align-items: center; gap: .6rem; padding: 14px 14px 10px 18px; border-bottom: 1px solid var(--linha-2); }
+.np-cab h2 { font-size: 1.3rem; margin-right: auto; }
+.np-cab .np-fechar { border: 0; }
+.np-lista { overflow-y: auto; padding: 6px; flex: 1; }
+.np-item { display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left; border: 0; background: none; padding: 10px; border-radius: 12px; cursor: pointer; color: inherit; font: inherit; }
+.np-item:hover { background: var(--fundo); }
+.np-item.nova { background: var(--vinho-claro); }
+.np-item.nova:hover { background: var(--folha-clara); }
+.np-av { position: relative; flex: none; }
+.np-av .avatar { width: 44px; height: 44px; }
+.np-av i { position: absolute; right: -4px; bottom: -3px; width: 22px; height: 22px; border-radius: 50%; background: var(--papel); display: grid; place-items: center; font-style: normal; font-size: .78rem; box-shadow: 0 0 0 1px var(--linha-2); }
+.np-sis { background: var(--vinho); padding: 9px; }
+.np-sis img { width: 100%; height: 100%; }
+.np-txt { flex: 1; min-width: 0; font-size: .93rem; line-height: 1.4; overflow-wrap: anywhere; }
+.np-txt time { display: block; font-size: .78rem; color: var(--fraco); margin-top: 3px; }
+.np-item.nova .np-txt time { color: var(--vinho-2); font-weight: 600; }
+.np-ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--vinho-2); flex: none; margin-top: 18px; }
+.np-vazio { padding: 30px 22px; text-align: center; color: var(--suave); font-size: .92rem; line-height: 1.5; }
+.np-vazio strong { display: block; color: var(--tinta); font: 500 1.15rem var(--serif); margin-bottom: .3rem; }
+.np-ajustes { display: block; text-align: center; padding: 12px; border-top: 1px solid var(--linha-2); font-size: .88rem; font-weight: 600; text-decoration: none; }
+@media (max-width: 720px) {
+  .notif-painel { inset: 0; width: auto; max-height: none; border-radius: 0; border: 0; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Perfil: preferências de notificação */
+.notif-prefs { display: grid; gap: .55rem; }
+.notif-prefs .chave { margin: 0; }
+.notif-celular { margin-top: 1.1rem; padding-top: 1rem; border-top: 1px solid var(--linha-2); }
+.notif-celular h4 { font: 600 .95rem var(--sans); margin: 0 0 .4rem; }
+.notif-celular .acoes-linha { display: flex; gap: .5rem; flex-wrap: wrap; }
+
+/* Versículo do dia */
+.versiculo-dia { background: var(--ouro-claro); border: 1px solid #EADBB8; border-radius: var(--r-lg); padding: 20px 22px; }
+html[data-tema="noite"] .versiculo-dia { border-color: #4A3F28; }
+.versiculo-dia h3 { font: 600 .8rem var(--sans); letter-spacing: .06em; color: #8A6A2C; margin: 0 0 .7rem; }
+html[data-tema="noite"] .versiculo-dia h3 { color: #D9B878; }
+.versiculo-dia blockquote { margin: 0; }
+.versiculo-dia blockquote p { margin: 0; font: 400 1.22rem/1.45 var(--serif); color: var(--tinta); text-wrap: pretty; }
+.versiculo-dia cite { display: block; margin-top: .6rem; font-style: normal; font-weight: 600; font-size: .88rem; color: var(--suave); }
+.vd-acoes { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: 1rem; }
+.vd-acoes .btn.sec { background: transparent; }
+.sem-curso h3 { margin-bottom: .5rem; }
+.post-unico { max-width: 680px; margin: 0 auto; }
+.login-criar { margin: 1.2rem 0 0; text-align: center; }
+
+/* ── Igrejas: marca no topo, página da igreja e gestão (rol, financeiro, dados) ── */
+.marca-igreja { min-width: 0; }
+.marca .logo-igreja { width: 34px; height: 34px; border-radius: 9px; object-fit: contain; background: #fff; flex: none; }
+.logo-letra { display: inline-grid; place-items: center; background: var(--vinho); color: var(--ouro); font: 600 .95rem var(--serif); border-radius: 9px; flex: none; }
+.marca .logo-letra { width: 34px; height: 34px; background: var(--vinho); }
+.igreja-capa-logo.logo-letra, .logo-letra.grande { background: var(--vinho); color: var(--ouro); }
+.marca-nome { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 22ch; }
+html[data-tema="noite"] .marca .logo-igreja { background: #e9ece6; }
+
+.rc-info { display: inline-flex; align-items: center; gap: .4rem; color: var(--suave); cursor: pointer; margin-right: auto; }
+.rc-info input { accent-color: var(--vinho); width: 16px; height: 16px; }
+.post-informativo { border-top: 3px solid var(--ouro); }
+.post-faixa { display: flex; align-items: center; gap: .35rem; font-size: .8rem; font-weight: 600; color: var(--vinho-2); padding: 12px 18px 0; }
+.post-faixa + .post-cab { padding-top: 8px; }
+.post-faixa svg { width: 15px; height: 15px; }
+
+.info-igreja .ii-itens { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ii-itens a { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: .7rem; align-items: center; padding: 8px; margin: 0 -8px; border-radius: var(--r-sm); text-decoration: none; color: inherit; }
+.ii-itens a:hover { background: var(--vinho-claro); }
+.ii-itens img, .ii-ico { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; }
+.ii-ico { display: grid; place-items: center; background: var(--ouro-claro); color: var(--vinho); }
+.ii-ico svg { width: 20px; height: 20px; }
+.ii-itens strong { display: block; font-weight: 600; font-size: .93rem; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ii-itens time { font-size: .78rem; color: var(--fraco); }
+
+.igreja-capa { display: flex; align-items: center; gap: 18px; margin: 4px 0 26px; }
+.igreja-capa h1 { font: 500 clamp(1.8rem, 4vw, 2.6rem)/1.1 var(--serif); margin: 0; color: var(--vinho); }
+html[data-tema="noite"] .igreja-capa h1 { color: var(--tinta); }
+.igreja-capa p { margin: .2rem 0 0; color: var(--suave); }
+.igreja-capa .btn { margin-left: auto; }
+.igreja-capa-logo { width: 76px; height: 76px; border-radius: 18px; object-fit: contain; background: #fff; box-shadow: var(--sombra); flex: none; }
+.igreja-capa-logo.logo-letra { font-size: 1.8rem; border-radius: 18px; }
+.igreja-grade { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.igreja-grade aside { display: grid; gap: 16px; }
+.igreja-grade aside .painel { margin: 0; }
+.igreja-sec { font: 500 1.35rem var(--serif); margin: 8px 0 12px; }
+#igreja-infos { display: grid; gap: 16px; }
+#igreja-infos .post { margin: 0; }
+.declaracao summary { cursor: pointer; font-weight: 600; color: var(--vinho-2); }
+.declaracao .leitura { margin-top: .8rem; max-height: 60vh; overflow: auto; font-size: .97rem; }
+.igreja-arqs { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.igreja-arqs li { display: flex; align-items: center; gap: .3rem; }
+.igreja-arqs a { flex: 1; display: flex; align-items: center; gap: .7rem; padding: 9px 10px; margin: 0 -10px; border-radius: var(--r-sm); text-decoration: none; color: inherit; min-width: 0; }
+.igreja-arqs a:hover { background: var(--vinho-claro); }
+.igreja-arqs a > svg { width: 22px; height: 22px; color: var(--perigo); flex: none; }
+.igreja-arqs span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.igreja-arqs small { display: block; color: var(--fraco); font-size: .78rem; }
+.igreja-contato { margin: 0; display: grid; gap: .15rem; }
+.igreja-contato dt { font-size: .8rem; color: var(--suave); margin-top: .5rem; }
+.igreja-contato dd { margin: 0; overflow-wrap: anywhere; }
+
+.gestao-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 6px; }
+.gestao-cab h1 { font: 500 clamp(1.7rem, 3.4vw, 2.3rem)/1.1 var(--serif); margin: 0; }
+.gestao-sobre { margin: 0 0 .2rem; color: var(--suave); font-size: .9rem; }
+.gestao-cab .acoes { display: flex; gap: .5rem; flex-wrap: wrap; }
+.gestao-abas a { padding: .7rem .9rem; font-weight: 600; color: var(--suave); text-decoration: none; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.gestao-abas a:hover { color: var(--tinta); }
+.gestao-abas a.ativo { color: var(--vinho); border-bottom-color: var(--vinho); }
+html[data-tema="noite"] .gestao-abas a.ativo { color: var(--vinho-2); border-bottom-color: var(--vinho-2); }
+.gestao .painel { margin-bottom: 16px; }
+.gestao a.numero { text-decoration: none; color: inherit; transition: border-color .15s; }
+.gestao a.numero:hover { border-color: var(--vinho-2); }
+.numero b.n-verde { color: #2F7A4A; }
+.numero b.n-vermelho { color: var(--perigo); }
+html[data-tema="noite"] .numero b.n-verde { color: #7FCB97; }
+.gestao .numero b { font-size: clamp(1.35rem, 2.6vw, 2rem); overflow-wrap: anywhere; }
+
+.fin-grafico { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; height: 180px; align-items: end; padding-top: 8px; }
+.fg-mes { display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 6px; text-align: center; font-size: .78rem; color: var(--suave); }
+.fg-barras { display: flex; align-items: flex-end; justify-content: center; gap: 4px; border-bottom: 1px solid var(--linha); }
+.fg-barras i { width: min(18px, 40%); border-radius: 4px 4px 0 0; min-height: 2px; }
+i.fg-e { background: #3B8C5A; }
+i.fg-s { background: var(--perigo); opacity: .8; }
+.fin-legenda { display: flex; gap: 1rem; color: var(--suave); margin: .8rem 0 0; }
+.fin-legenda span { display: inline-flex; align-items: center; gap: .35rem; }
+.fin-legenda i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.aviso-pend { background: var(--ouro-claro); border-radius: var(--r-sm); padding: .6rem .8rem; margin: .9rem 0 0; font-size: .92rem; }
+.aviso-pend a { font-weight: 600; margin-left: .3rem; }
+.gestao > .aviso-pend, #g-corpo > .aviso-pend { margin: 0 0 16px; }
+.link-copiar { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
+.link-copiar code { flex: 1; min-width: 0; background: var(--vinho-claro); padding: .5rem .7rem; border-radius: var(--r-sm); font-size: .88rem; overflow-wrap: anywhere; }
+.aniv { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.aniv li { display: flex; gap: .8rem; align-items: center; }
+.aniv b { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; background: var(--ouro-claro); font: 600 1.1rem var(--serif); flex: none; }
+.aniv small { display: block; color: var(--suave); font-size: .8rem; }
+.sit-lista { list-style: none; margin: 0; padding: 0; }
+.sit-lista li { display: flex; justify-content: space-between; padding: .45rem 0; border-bottom: 1px solid var(--linha-2); }
+.sit-lista li:last-child { border: 0; }
+
+.filtros-membros { display: grid; grid-template-columns: minmax(0, 1fr) 220px; gap: 10px; margin-bottom: 14px; }
+.linha-clique { cursor: pointer; }
+.linha-clique:focus-visible { outline: 2px solid var(--vinho-2); outline-offset: -2px; }
+.contas-fora { border-left: 3px solid var(--ouro); }
+.cf-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.cf-lista li { display: flex; justify-content: space-between; align-items: center; gap: .8rem; }
+.cf-lista small { display: block; color: var(--suave); font-size: .8rem; }
+.formatos { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: .4rem; }
+.atalhos-periodo { display: flex; gap: 1rem; margin: -.4rem 0 1rem; font-size: .88rem; flex-wrap: wrap; }
+
+.mes-nav { display: flex; align-items: center; gap: .4rem; margin: 0 0 16px; }
+.mes-nav h2 { font: 500 1.45rem var(--serif); margin: 0 .4rem; min-width: 11ch; text-align: center; }
+.mes-nav h2::first-letter { text-transform: uppercase; }
+.mes-escolha { width: auto; margin-left: auto; min-height: 38px; padding: .3rem .6rem; }
+.fin-grade > div > .painel-cab h3 { font: 500 1.2rem var(--serif); }
+.lanc-lista { list-style: none; margin: 0; padding: 0; background: var(--papel); border: 1px solid var(--linha-2); border-radius: var(--r-md); }
+.lanc { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: .8rem; align-items: center; padding: 11px 14px; border-bottom: 1px solid var(--linha-2); cursor: pointer; }
+.lanc:last-child { border-bottom: 0; }
+.lanc:hover { background: var(--vinho-claro); }
+.lanc:focus-visible { outline: 2px solid var(--vinho-2); outline-offset: -2px; }
+.lanc-data { text-align: center; font-size: .72rem; color: var(--suave); line-height: 1.1; }
+.lanc-data b { display: block; font: 500 1.2rem var(--serif); color: var(--tinta); }
+.lanc-txt strong { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lanc-txt small { display: block; color: var(--suave); font-size: .8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lanc-valor { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; display: grid; gap: 4px; justify-items: end; }
+.lanc.entrada .lanc-valor { color: #2F7A4A; }
+.lanc.saida .lanc-valor { color: var(--perigo); }
+html[data-tema="noite"] .lanc.entrada .lanc-valor { color: #7FCB97; }
+.lanc.pendente .lanc-txt strong::after { content: ' · a pagar'; font-weight: 500; color: #85642A; font-size: .82rem; }
+.lanc.pendente.entrada .lanc-txt strong::after { content: ' · a receber'; }
+.lanc.pendente { background: repeating-linear-gradient(135deg, transparent 0 10px, var(--ouro-claro) 10px 11px); }
+.cat-tit { font-size: .82rem; font-weight: 600; color: var(--suave); margin: .2rem 0 .4rem; }
+.cat-lista { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 8px; }
+.cat-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px .6rem; font-size: .92rem; }
+.cat-lista li b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.cat-lista li i { grid-column: 1 / -1; height: 5px; border-radius: 3px; background: #3B8C5A; opacity: .75; }
+.cat-lista.s li i { background: var(--perigo); }
+.rec-lista { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rec-lista li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: .5rem; align-items: center; }
+.rec-lista li.pausada { opacity: .55; }
+.rec-lista small { display: block; color: var(--suave); font-size: .8rem; }
+.rec-lista b { font-variant-numeric: tabular-nums; }
+.tipo-escolha-fin { display: flex; gap: 1.2rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.tipo-escolha-fin label { display: inline-flex; gap: .4rem; align-items: center; cursor: pointer; }
+.input-valor { font-variant-numeric: tabular-nums; font-size: 1.15rem; font-weight: 600; }
+.linha-senha { display: flex; gap: .6rem; align-items: flex-end; }
+
+.logo-edit { display: flex; gap: 16px; align-items: center; }
+.logo-edit img, .logo-letra.grande { width: 84px; height: 84px; border-radius: 18px; object-fit: contain; background: #fff; border: 1px solid var(--linha-2); flex: none; }
+.logo-letra.grande { font-size: 2rem; }
+.temas { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.tema-btn { display: flex; align-items: center; gap: .5rem; border: 1px solid var(--linha); background: var(--papel); border-radius: var(--r-sm); padding: .5rem .6rem; cursor: pointer; font: 500 .88rem var(--sans); color: var(--tinta); text-align: left; }
+.tema-btn span { width: 18px; height: 18px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.1); }
+.tema-btn span + span { margin-left: -12px; }
+.tema-btn.ativo { border-color: var(--tinta); box-shadow: 0 0 0 1px var(--tinta); }
+.cor-input { padding: 4px; height: 44px; cursor: pointer; }
+.cor-previa { --pp: #1E3B2C; --pd: #B48A3F; display: flex; align-items: center; gap: .6rem; border: 1px solid var(--linha-2); border-radius: var(--r-md); padding: 10px; background: var(--papel); }
+.cp-barra { width: 48px; height: 32px; border-radius: 6px; background: var(--pp); }
+.cp-btn { background: var(--pp); color: #fff; font-weight: 600; font-size: .85rem; padding: .45rem .9rem; border-radius: 8px; }
+.cp-selo { background: var(--pd); color: #fff; font-weight: 600; font-size: .78rem; padding: .25rem .7rem; border-radius: 99px; }
+.igreja-arqs.edit li .icone-btn { flex: none; }
+
+/* admin interno: lista de igrejas */
+.igrejas-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+.igreja-item { margin: 0; }
+.igreja-item.desativada { opacity: .7; }
+.ii-cab { display: flex; gap: .8rem; align-items: center; }
+.ii-cab img, .ii-cab .logo-letra { width: 48px; height: 48px; border-radius: 12px; object-fit: contain; background: #fff; flex: none; font-size: 1.1rem; }
+.ii-cab h3 { margin: 0; }
+.ii-cab p { margin: .1rem 0 0; }
+.ii-cab .selo { margin-left: auto; }
+.ii-chaves { display: grid; gap: .55rem; padding: .8rem 0; border-top: 1px solid var(--linha-2); border-bottom: 1px solid var(--linha-2); margin: .4rem 0 .8rem; }
+.ii-acoes { display: flex; gap: .4rem; flex-wrap: wrap; }
+.campo-slug { display: flex; align-items: center; border: 1px solid var(--linha); border-radius: var(--r-sm); background: var(--papel); overflow: hidden; }
+.campo-slug > span { padding: 0 .2rem 0 .75rem; color: var(--suave); font-size: .9rem; white-space: nowrap; }
+.campo-slug .input { border: 0; padding-left: 0; min-width: 0; }
+
+@media (max-width: 1020px) { .igreja-grade { grid-template-columns: 1fr; } }
+@media (max-width: 720px) {
+  .marca-nome { max-width: 16ch; font-size: 1.1rem; }
+  .filtros-membros { grid-template-columns: 1fr; }
+  .gestao-cab .acoes { width: 100%; }
+  .gestao-cab .acoes .btn { flex: 1; }
+  .mes-escolha { display: none; }
+  .mes-nav h2 { flex: 1; font-size: 1.25rem; }
+  .lanc { grid-template-columns: 38px minmax(0, 1fr); padding: 10px 12px; }
+  .lanc-valor { grid-column: 2; justify-items: start; text-align: left; }
+  .igreja-capa { flex-wrap: wrap; }
+  .igrejas-lista { grid-template-columns: 1fr; }
+  .linha-senha { flex-direction: column; align-items: stretch; }
 }

@@ -25,6 +25,10 @@ function iaPronta() { const c = getConfig(); return c.ia_ativa === '1' && !!c._o
 function podeIA(u) {
   if (!u || !iaPronta()) return false;
   if (u.papel === 'professor') return true;
+  if (u.igreja_id) {   // igrejas: a IA só vale para a administração, e só se o admin interno ligar
+    const ig = db.prepare('SELECT ia_ativa FROM igrejas WHERE id = ?').get(u.igreja_id);
+    return !!(ig && ig.ia_ativa && u.papel === 'pastor');
+  }
   const r = db.prepare('SELECT pode_ia FROM usuarios WHERE id = ?').get(u.id);
   return !!(r && r.pode_ia);
 }
@@ -446,7 +450,7 @@ REGRAS: não invente versículos, datas, números ou costumes; cite outros texto
   P.get('/ia', h((req, res) => {
     const c = getConfig(); const k = c._openai_chave || '';
     res.json({ ativa: c.ia_ativa === '1', modelo: c.ia_modelo || 'gpt-6.1-sol', limite: Number(c.ia_limite_dia) || 15, tem_chave: !!k, chave_fim: k ? k.slice(-4) : '',
-      usuarios: db.prepare("SELECT id, nome, usuario, pode_ia, ativo FROM usuarios WHERE papel = 'aluno' ORDER BY nome").all(),
+      usuarios: db.prepare("SELECT id, nome, usuario, pode_ia, ativo FROM usuarios WHERE papel = 'aluno' AND igreja_id IS NULL ORDER BY nome").all(),
       frases: db.prepare('SELECT * FROM frases ORDER BY id').all(),
       uso_hoje: db.prepare('SELECT COALESCE(SUM(n),0) n FROM ia_uso WHERE dia = ?').get(hojeStr()).n });
   }));

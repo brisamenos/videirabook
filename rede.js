@@ -19,7 +19,10 @@
   // ── Utilidades
   const textoHtml = t => esc(t).replace(/(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>').replace(/\n/g, '<br>');
   const nomeCurto = p => VB.primeiroNome(p.nome);
-  const seloProf = p => p.papel === 'professor' ? '<span class="rede-selo">Professor</span>' : '';
+  const seloProf = p => p.papel === 'professor' ? '<span class="rede-selo">Professor</span>' : p.papel === 'pastor' ? '<span class="rede-selo">Liderança</span>' : '';
+  // "turma" no espaço principal, "igreja" para quem entrou pelo endereço de uma igreja
+  const grupo = () => VB.me && VB.me.igreja ? 'igreja' : 'turma';
+  const ehLider = () => VB.me && VB.me.papel === 'pastor';
   function autoAltura(ta) { const f = () => { ta.style.height = 'auto'; ta.style.height = Math.min(ta.scrollHeight, 320) + 'px'; }; ta.addEventListener('input', f); f(); }
   function resumoReacoes(r) {
     if (!r || !r.total) return '';
@@ -69,7 +72,7 @@
 
   // ════════ Página Início: monta status e mural dentro do elemento dado
   rede.montar = async function (raiz, raizStatus) {
-    const faixa = `<div class="status-faixa" id="status-faixa" aria-label="Status da turma"><div class="carregando mini"></div></div>`;
+    const faixa = `<div class="status-faixa" id="status-faixa" aria-label="Status da ${grupo()}"><div class="carregando mini"></div></div>`;
     if (raizStatus) raizStatus.innerHTML = faixa;
     raiz.innerHTML = `${raizStatus ? '' : faixa}
       <div class="rede-compor painel" id="rede-compor"></div>
@@ -90,10 +93,11 @@
     el.innerHTML = `
       <div class="rc-linha">${VB.avatar(VB.me)}
         <label class="sr" for="rc-texto">Escreva sua publicação</label>
-        <textarea id="rc-texto" rows="1" maxlength="5000" placeholder="Escreva algo para a turma, ${esc(VB.primeiroNome(VB.me.nome))}…"></textarea></div>
+        <textarea id="rc-texto" rows="1" maxlength="5000" placeholder="Escreva algo para a ${grupo()}, ${esc(VB.primeiroNome(VB.nomeExibicao(VB.me)))}…"></textarea></div>
       <div class="rc-previas" id="rc-previas"></div>
       <div class="rc-acoes">
         <label class="btn fantasma rc-foto">${ic.foto}<span>Foto</span><input type="file" accept="image/*" multiple class="sr" id="rc-arq"></label>
+        ${ehLider() ? '<label class="rc-info pequeno"><input type="checkbox" id="rc-informativo"> Informativo da igreja</label>' : ''}
         <span class="rc-progresso pequeno muted" id="rc-prog"></span>
         <button class="btn" type="button" id="rc-publicar" disabled>Publicar</button>
       </div>`;
@@ -114,12 +118,13 @@
     });
     bt.addEventListener('click', async () => {
       const fd = new FormData(); fd.append('texto', ta.value);
+      const inf = $('#rc-informativo', el); if (inf && inf.checked) fd.append('informativo', '1');
       fotos.forEach(f => fd.append('imagens', f.blob, f.nome));
       fd.append('dimensoes', JSON.stringify(fotos.map(f => ({ l: f.l, a: f.a }))));
       bt.disabled = true; bt.textContent = 'Publicando…';
       try {
         const p = await VB.enviar('/api/rede/posts', fd, 'POST', pct => { $('#rc-prog', el).textContent = fotos.length ? `Enviando ${pct}%` : ''; });
-        fotos.forEach(f => URL.revokeObjectURL(f.url)); fotos = []; ta.value = ''; desenhar(); ta.dispatchEvent(new Event('input'));
+        fotos.forEach(f => URL.revokeObjectURL(f.url)); fotos = []; ta.value = ''; if (inf) inf.checked = false; desenhar(); ta.dispatchEvent(new Event('input'));
         const lista = $('#rede-lista'); const vazio = $('.rede-vazio', lista); if (vazio) vazio.remove();
         lista.insertAdjacentHTML('afterbegin', postHtml(p)); ligarPost(lista.firstElementChild, p);
         estado.ultimoId = Math.max(estado.ultimoId, p.id);
@@ -138,7 +143,7 @@
       const d = await VB.api('/api/rede/feed' + (inicio ? '' : `?antes=${estado.maisAntigo}`));
       if (geracao !== estado.geracao || !lista.isConnected) return;   // a página foi redesenhada enquanto carregava
       if (inicio) lista.innerHTML = '';
-      if (inicio && !d.posts.length) lista.innerHTML = `<div class="rede-vazio painel"><h3>O mural da turma está esperando a primeira publicação</h3>
+      if (inicio && !d.posts.length) lista.innerHTML = `<div class="rede-vazio painel"><h3>O mural da ${grupo()} está esperando a primeira publicação</h3>
         <p class="muted">Compartilhe um versículo que falou com você, uma foto do encontro ou um pedido de oração.</p></div>`;
       for (const p of d.posts) { lista.insertAdjacentHTML('beforeend', postHtml(p)); ligarPost(lista.lastElementChild, p); }
       if (d.posts.length) { estado.maisAntigo = d.posts[d.posts.length - 1].id; if (inicio) estado.ultimoId = d.posts[0].id; }
@@ -178,9 +183,10 @@
   }
   function postHtml(p) {
     const longo = p.texto.length > 420 || (p.texto.match(/\n/g) || []).length > 7;
-    return `<article class="post painel" data-id="${p.id}">
+    return `<article class="post painel${p.informativo ? ' post-informativo' : ''}" data-id="${p.id}">
+      ${p.informativo ? `<div class="post-faixa">${VB.icone.alfinete}Informativo da igreja</div>` : ''}
       <header class="post-cab">${VB.avatar(p.autor)}<div class="post-quem"><strong>${esc(p.autor.nome)}</strong>${seloProf(p.autor)}
-        <time datetime="${esc(p.criado_em)}">${VB.quando(p.criado_em)}${p.editado_em ? ' · editado' : ''}</time></div>
+        <span class="post-sub">${p.autor.arroba ? `<span class="arroba">@${esc(p.autor.arroba)}</span> · ` : ''}<time datetime="${esc(p.criado_em)}">${VB.quando(p.criado_em)}${p.editado_em ? ' · editado' : ''}</time></span></div>
         ${p.pode_apagar || p.pode_editar ? `<button type="button" class="icone-btn post-menu" data-abre-flut aria-label="Opções da publicação">${ic.pontos}</button>` : ''}</header>
       ${p.texto ? `<div class="post-texto${longo ? ' longo' : ''}">${textoHtml(p.texto)}</div>${longo ? '<button type="button" class="link-btn ver-mais">Ver mais</button>' : ''}` : ''}
       ${fotosHtml(p.imagens)}
@@ -250,12 +256,17 @@
     const bm = $('.post-menu', el);
     if (bm) bm.addEventListener('click', () => {
       const f = abrirFlut(bm, `${p.pode_editar ? `<button type="button" data-a="editar">${ic.lapis}Editar texto</button>` : ''}
+        ${ehLider() && p.autor.id === VB.me.id ? `<button type="button" data-a="info">${VB.icone.alfinete}${p.informativo ? 'Tirar do mural de informações' : 'Pôr no mural de informações'}</button>` : ''}
         ${p.pode_apagar ? `<button type="button" data-a="apagar" class="perigo">${ic.lixo}Apagar publicação</button>` : ''}`, 'menu');
       $$('button', f).forEach(b => b.addEventListener('click', async () => {
         fecharFlut();
         if (b.dataset.a === 'apagar') {
           if (!await VB.confirmar('Apagar publicação', p.autor.id === VB.me.id ? 'A publicação, as fotos e os comentários serão apagados.' : `A publicação de ${esc(p.autor.nome)}, com as fotos e os comentários, será apagada para todos.`, 'Apagar')) return;
           try { await VB.api(`/api/rede/posts/${p.id}`, { method: 'DELETE' }); el.remove(); VB.toast('Publicação apagada'); } catch (er) { VB.erro(er); }
+        } else if (b.dataset.a === 'info') {
+          try { await VB.api(`/api/rede/posts/${p.id}`, { method: 'PUT', body: { texto: p.texto, informativo: !p.informativo } }); p.informativo = !p.informativo;
+            const novo = document.createElement('div'); novo.innerHTML = postHtml(p); const art = novo.firstElementChild; el.replaceWith(art); ligarPost(art, p);
+            VB.toast(p.informativo ? 'Está no mural de informações' : 'Saiu do mural de informações'); } catch (er) { VB.erro(er); }
         } else editar();
       }));
     });
@@ -275,6 +286,17 @@
       });
     }
   }
+
+  rede._desenharPost = (el, p) => { el.innerHTML = postHtml(p); ligarPost(el.firstElementChild, p); };
+  // Mural de informações da igreja (informativos e cartazes da liderança)
+  rede.informativos = async function (el, limite) {
+    if (!el) return;
+    try {
+      const lista = (await VB.api('/api/rede/informativos')).slice(0, limite || 40);
+      el.innerHTML = lista.length ? '' : `<div class="vazio" style="border:0;padding:1rem 0">${ehLider() ? 'Publique um informativo no mural (marque “Informativo da igreja”) e ele aparece aqui para todos.' : 'Nenhum informativo por enquanto.'}</div>`;
+      for (const p of lista) { const d = document.createElement('div'); d.innerHTML = postHtml(p); const art = d.firstElementChild; el.appendChild(art); ligarPost(art, p); }
+    } catch (er) { el.innerHTML = `<p class="muted">${esc(er.message)}</p>`; }
+  };
 
   async function quemReagiu(alvo, id) {
     try {
@@ -316,7 +338,7 @@
         <button type="button" class="st-novo" aria-label="Postar um status">${ic.mais}</button>
         <span>Seu status</span></div>
       ${grupos.filter(g => g.pessoa.id !== VB.me.id).map(g => `<div class="st-item"><button type="button" class="st-anel ${g.novos ? 'novo' : 'visto'}" data-u="${g.pessoa.id}" aria-label="Ver status de ${esc(g.pessoa.nome)}">${VB.avatar(g.pessoa)}</button><span>${esc(nomeCurto(g.pessoa))}</span></div>`).join('')}
-      ${grupos.filter(g => g.pessoa.id !== VB.me.id).length ? '' : '<p class="st-dica muted pequeno">Os status da turma aparecem aqui e somem depois de 24 horas.</p>'}`;
+      ${grupos.filter(g => g.pessoa.id !== VB.me.id).length ? '' : `<p class="st-dica muted pequeno">Os status da ${grupo()} aparecem aqui e somem depois de 24 horas.</p>`}`;
     $('.st-novo', faixa).addEventListener('click', criarStatus);
     $('[data-meu]', faixa).addEventListener('click', () => meu ? verStatus(grupos.indexOf(meu), 0) : criarStatus());
     $$('[data-u]', faixa).forEach(b => b.addEventListener('click', () => {
@@ -330,7 +352,7 @@
     let cor = cores[0] || '#1E3B2C', foto = null;
     const m = VB.modal({
       titulo: 'Novo status',
-      corpo: `<p class="muted pequeno" style="margin:0 0 .9rem">O status fica no ar por 24 horas. A turma pode reagir e comentar.</p>
+      corpo: `<p class="muted pequeno" style="margin:0 0 .9rem">O status fica no ar por 24 horas. ${grupo() === 'igreja' ? 'A igreja' : 'A turma'} pode reagir e comentar.</p>
         <div class="stc-abas" role="tablist"><button type="button" role="tab" aria-selected="true" data-m="texto">Texto</button><button type="button" role="tab" aria-selected="false" data-m="foto">Foto</button></div>
         <div class="stc-previa" id="stc-previa" style="background:${cor}">
           <textarea id="stc-texto" maxlength="700" rows="4" placeholder="Escreva seu status…" aria-label="Texto do status"></textarea>
@@ -386,7 +408,7 @@
       if (!s.visto && !meu) { s.visto = true; VB.api(`/api/rede/status/${s.id}/visto`, { method: 'POST' }).catch(() => {}); }
       el.innerHTML = `<div class="st-caixa">
         <div class="st-barras">${g.itens.map((x, k) => `<i><b style="width:${k < ii ? 100 : 0}%"></b></i>`).join('')}</div>
-        <header class="st-cab">${VB.avatar(g.pessoa)}<div><strong>${esc(meu ? 'Seu status' : g.pessoa.nome)}</strong><time>${VB.quando(s.criado_em)}</time></div>
+        <header class="st-cab">${VB.avatar(g.pessoa)}<div><strong>${esc(meu ? 'Seu status' : g.pessoa.nome)}</strong><time>${!meu && g.pessoa.arroba ? `@${esc(g.pessoa.arroba)} · ` : ''}${VB.quando(s.criado_em)}</time></div>
           ${s.pode_apagar ? `<button type="button" class="st-btn" data-apagar aria-label="Apagar este status">${ic.lixo}</button>` : ''}
           <button type="button" class="st-btn" data-fechar aria-label="Fechar">${ic.fechar}</button></header>
         <div class="st-conteudo ${s.imagem ? 'foto' : 'texto'}" style="${s.imagem ? '' : `background:${esc(s.cor || '#1E3B2C')}`}">
@@ -474,11 +496,29 @@
   // ════════ Foto de perfil (página Perfil)
   rede.blocoFoto = function (el) {
     const desenhar = () => {
-      el.innerHTML = `<h3>Foto de perfil</h3>
+      el.innerHTML = `<h3>Como você aparece na rede</h3>
         <div class="perfil-foto">${VB.avatar(VB.me, 'grande')}
-          <div><p class="muted pequeno" style="margin:0 0 .8rem">Ela aparece nas suas publicações, comentários e status.</p>
+          <div><p class="muted pequeno" style="margin:0 0 .8rem">A foto aparece nas suas publicações, comentários e status.</p>
           <div class="acoes-linha"><label class="btn sec">${ic.foto}${VB.me.foto ? 'Trocar foto' : 'Escolher foto'}<input type="file" accept="image/*" class="sr" id="pf-arq"></label>
-          ${VB.me.foto ? '<button type="button" class="btn fantasma" id="pf-tirar">Remover foto</button>' : ''}</div></div></div>`;
+          ${VB.me.foto ? '<button type="button" class="btn fantasma" id="pf-tirar">Remover foto</button>' : ''}</div></div></div>
+        <form id="pf-form" class="pf-form" novalidate>
+          <label class="campo"><span>Nome de exibição</span><input class="input" name="apelido" maxlength="40" value="${esc(VB.me.apelido || '')}" placeholder="${esc(VB.me.nome)}">
+            <small>É o nome que a ${grupo()} vê. Se ficar vazio, aparece o nome do cadastro: ${esc(VB.me.nome)}.</small></label>
+          <label class="campo"><span>Seu @</span><div class="campo-arroba"><b aria-hidden="true">@</b><input class="input" name="arroba" maxlength="21" autocapitalize="none" autocomplete="off" spellcheck="false" value="${esc(VB.me.arroba || '')}" placeholder="seu.nome"></div>
+            <small>De 3 a 20 caracteres: letras sem acento, números, ponto e sublinhado. Aparece ao lado do seu nome nas publicações.</small></label>
+          <p class="erro-msg" id="pf-erro"></p>
+          <button class="btn" type="submit">Salvar nome e @</button>
+        </form>`;
+      const ar = $('[name=arroba]', el);
+      ar.addEventListener('input', () => { const v = ar.value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/^@+/, '').replace(/\s+/g, '.').replace(/[^a-z0-9._]/g, ''); if (v !== ar.value) ar.value = v; });
+      $('#pf-form', el).addEventListener('submit', async e => {
+        e.preventDefault(); $('#pf-erro', el).textContent = '';
+        try {
+          const d = await VB.api('/api/me/perfil', { method: 'PUT', body: { apelido: $('[name=apelido]', el).value, arroba: ar.value } });
+          VB.me.apelido = d.apelido; VB.me.arroba = d.arroba; atualizaTopo(); VB.toast('Nome e @ salvos');
+          const n = $('.topo .usuario-chip .nome'); if (n) n.textContent = VB.primeiroNome(VB.nomeExibicao(VB.me));
+        } catch (er) { $('#pf-erro', el).textContent = er.message; }
+      });
       $('#pf-arq', el).addEventListener('change', async e => {
         const f = e.target.files[0]; if (!f) return;
         try {
@@ -507,4 +547,156 @@
       img.src = url;
     });
   }
+})();
+
+/* ════════ Notificações, versículo do dia e página de uma publicação */
+(function () {
+  const { esc, icone, $, $$ } = VB;
+  const rede = VB.rede;
+  const ICO_TIPO = { reacao: '❤️', comentario: '💬', professor_post: '📣', aviso: '📌', curso: '🎓', inscricao: '🙋' };
+
+  // ── Sino (contador de não lidas)
+  let naoLidas = 0, tSino = null;
+  function pintarSino() {
+    $$('.sino-badge').forEach(b => { b.hidden = !naoLidas; b.textContent = naoLidas > 9 ? '9+' : naoLidas; });
+    $$('[data-sino]').forEach(b => b.setAttribute('aria-label', naoLidas ? `Notificações: ${naoLidas} não lida${naoLidas > 1 ? 's' : ''}` : 'Notificações'));
+  }
+  async function contar() {
+    if (!VB.me || document.hidden) return;
+    try { naoLidas = (await VB.api('/api/notificacoes/contagem')).nao_lidas; pintarSino(); } catch { /* sem conexão */ }
+  }
+  rede.ligarSino = function (botao) {
+    if (!botao) return;
+    botao.setAttribute('data-sino', '');
+    botao.addEventListener('click', e => { e.preventDefault(); abrirPainel(botao); });
+    pintarSino(); contar();
+    if (!tSino) { tSino = setInterval(contar, 60000); document.addEventListener('visibilitychange', () => { if (!document.hidden) contar(); }); }
+  };
+
+  // ── Painel de notificações
+  let painel = null;
+  function fecharPainel() { if (painel) { painel.remove(); painel = null; document.removeEventListener('pointerdown', fora, true); document.removeEventListener('keydown', tecla); } }
+  function fora(e) { if (painel && !painel.contains(e.target) && !e.target.closest('[data-sino]')) fecharPainel(); }
+  function tecla(e) { if (e.key === 'Escape') fecharPainel(); }
+  async function abrirPainel(botao) {
+    if (painel) return fecharPainel();
+    painel = document.createElement('div'); painel.className = 'notif-painel'; painel.setAttribute('role', 'dialog'); painel.setAttribute('aria-label', 'Notificações');
+    painel.innerHTML = `<div class="np-cab"><h2>Notificações</h2><button type="button" class="link-btn" id="np-todas">Marcar todas como lidas</button>
+      <button type="button" class="icone-btn np-fechar" aria-label="Fechar">${icone.fechar}</button></div><div class="np-lista"><div class="carregando mini"></div></div>
+      <a class="np-ajustes" href="#/perfil">Escolher o que receber</a>`;
+    document.body.appendChild(painel);
+    const r = botao.getBoundingClientRect();
+    if (innerWidth > 720) { painel.style.top = r.bottom + 8 + 'px'; painel.style.right = Math.max(12, innerWidth - r.right - 8) + 'px'; }
+    setTimeout(() => { document.addEventListener('pointerdown', fora, true); document.addEventListener('keydown', tecla); });
+    $('.np-fechar', painel).addEventListener('click', fecharPainel);
+    $('.np-ajustes', painel).addEventListener('click', () => { fecharPainel(); setTimeout(() => { const n = $('#perfil-notif'); if (n) n.scrollIntoView({ behavior: 'smooth' }); }, 400); });
+    let d;
+    try { d = await VB.api('/api/notificacoes'); } catch (er) { $('.np-lista', painel).innerHTML = `<p class="erro-msg" style="padding:16px">${esc(er.message)}</p>`; return; }
+    if (!painel) return;
+    naoLidas = d.nao_lidas; pintarSino();
+    $('.np-lista', painel).innerHTML = d.lista.length ? d.lista.map(n => `
+      <button type="button" class="np-item${n.lida ? '' : ' nova'}" data-id="${n.id}" data-link="${esc(n.link || '')}">
+        <span class="np-av">${n.ator ? VB.avatar(n.ator) : '<span class="avatar np-sis" aria-hidden="true"><img src="/img/logo.svg" alt=""></span>'}<i aria-hidden="true">${ICO_TIPO[n.tipo] || '🔔'}</i></span>
+        <span class="np-txt">${esc(n.texto)}<time>${VB.quando(n.criado_em)}</time></span>
+        ${n.lida ? '' : '<span class="np-ponto" aria-label="Não lida"></span>'}
+      </button>`).join('') : `<div class="np-vazio"><strong>Nada por aqui ainda</strong>Quando alguém reagir ou comentar no que você publicou, ${VB.me && VB.me.igreja ? 'ou quando a liderança publicar um informativo, aparece aqui.' : 'ou quando o professor liberar um curso, aparece aqui.'}</div>`;
+    $$('.np-item', painel).forEach(b => b.addEventListener('click', async () => {
+      if (b.classList.contains('nova')) { VB.api('/api/notificacoes/lidas', { method: 'POST', body: { id: Number(b.dataset.id) } }).catch(() => {}); naoLidas = Math.max(0, naoLidas - 1); pintarSino(); }
+      fecharPainel();
+      if (b.dataset.link) { if (location.hash === b.dataset.link) VB.rota(); else location.hash = b.dataset.link; }
+    }));
+    $('#np-todas', painel).addEventListener('click', async () => {
+      try { await VB.api('/api/notificacoes/lidas', { method: 'POST', body: {} }); naoLidas = 0; pintarSino();
+        $$('.np-item.nova', painel).forEach(x => { x.classList.remove('nova'); const p = $('.np-ponto', x); if (p) p.remove(); }); } catch (er) { VB.erro(er); }
+    });
+  }
+
+  // ── Uma publicação (aberta pela notificação)
+  VB.registrar(/^\/post\/(\d+)$/, 'todos', async id => {
+    VB.molduraAluno('inicio', '<div class="carregando"></div>');
+    document.title = 'Publicação · VideiraBook';
+    try {
+      const p = await VB.api(`/api/rede/posts/${id}`);
+      $('#conteudo').innerHTML = `<div class="post-unico"><a class="btn fantasma" href="#/inicio" style="margin-bottom:12px">${VB.icone.cima.replace('<path d="M6 15l6-6 6 6"/>', '<path d="M15 6l-6 6 6 6"/>')}Voltar ao mural</a><div id="post-um"></div></div>`;
+      rede._desenharPost($('#post-um'), p);
+    } catch (er) {
+      $('#conteudo').innerHTML = `<div class="post-unico"><div class="rede-vazio painel"><h3>Esta publicação não está mais no mural</h3><p class="muted">Ela pode ter sido apagada por quem publicou.</p><a class="btn" href="#/inicio" style="margin-top:1rem">Ir para o mural</a></div></div>`;
+    }
+  });
+
+  // ── Versículo do dia
+  rede.versiculoDoDia = async function (el) {
+    if (!el) return;
+    try {
+      const v = await VB.api('/api/versiculo-do-dia');
+      const livro = VB.LIVROS && VB.LIVROS[v.livro];
+      const ref = `${livro ? livro[0] : ''} ${v.cap}.${v.ini}${v.fim > v.ini ? '-' + v.fim : ''}`;
+      el.innerHTML = `<section class="versiculo-dia" aria-labelledby="vd-tit">
+        <h3 id="vd-tit">Versículo do dia</h3>
+        <blockquote><p>${esc(v.texto)}</p><cite>${esc(ref)} · ${esc(v.versao)}</cite></blockquote>
+        <div class="vd-acoes">${livro ? `<a class="btn sec mini" href="${VB.rotaBiblia(livro, v.cap, v.ini)}">Ler o capítulo</a>` : ''}
+          <button type="button" class="btn fantasma mini" id="vd-compartilhar">Compartilhar no mural</button></div>
+      </section>`;
+      const b = $('#vd-compartilhar', el);
+      b.addEventListener('click', () => {
+        const ta = $('#rc-texto');
+        if (!ta) { location.hash = '#/inicio'; return; }
+        ta.value = `"${v.texto}" (${ref})\n\n`; ta.dispatchEvent(new Event('input')); ta.focus();
+        ta.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    } catch { el.remove(); }
+  };
+
+  // ── Perfil: escolher as notificações e ativar no celular
+  const b64 = s => { const p = '='.repeat((4 - s.length % 4) % 4); const r = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...r].map(c => c.charCodeAt(0))); };
+  async function inscricaoAtual() {
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+    const reg = await navigator.serviceWorker.getRegistration(); if (!reg) return null;
+    return reg.pushManager.getSubscription();
+  }
+  rede.blocoNotificacoes = async function (el) {
+    if (!el) return;
+    let d; try { d = await VB.api('/api/notificacoes/preferencias'); } catch { el.remove(); return; }
+    const suporta = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    const ios = /iphone|ipad/i.test(navigator.userAgent) && !navigator.standalone && !matchMedia('(display-mode: standalone)').matches;
+    const desenhar = async () => {
+      const sub = await inscricaoAtual().catch(() => null);
+      const ativo = !!sub && Notification.permission === 'granted';
+      el.innerHTML = `<h3>Notificações</h3>
+        <p class="muted pequeno" style="margin:.2rem 0 .9rem">Escolha o que você quer receber. Tudo aparece no sino, no topo do app.</p>
+        <div class="notif-prefs">${Object.entries(d.rotulos).map(([k, r]) => `<label class="chave"><input type="checkbox" data-pref="${k}" ${d.prefs[k] ? 'checked' : ''}>${esc(r)}</label>`).join('')}</div>
+        <div class="notif-celular">
+          <h4>Neste aparelho</h4>
+          ${!d.celular_disponivel ? '<p class="muted pequeno">As notificações fora do app não estão ligadas no servidor.</p>'
+            : !suporta ? `<p class="muted pequeno">${ios ? 'No iPhone, primeiro adicione o VideiraBook à Tela de Início (botão Compartilhar → Adicionar à Tela de Início) e abra o app por lá. Depois volte aqui para ativar.' : 'Este navegador não recebe notificações. Tente pelo Chrome ou pelo app instalado.'}</p>`
+            : Notification.permission === 'denied' ? '<p class="muted pequeno">As notificações estão bloqueadas para este site. Libere nas configurações do navegador (ícone de cadeado ao lado do endereço) e volte aqui.</p>'
+            : ativo ? `<p class="pequeno" style="margin:0 0 .7rem"><span class="selo verde">Ativadas</span> Você recebe as notificações mesmo com o app fechado.</p>
+                <div class="acoes-linha"><button type="button" class="btn sec mini" id="nt-teste">Enviar um teste</button><button type="button" class="btn fantasma mini" id="nt-desligar">Desativar neste aparelho</button></div>`
+            : `<p class="muted pequeno" style="margin:0 0 .7rem">Receba um aviso no celular quando alguém reagir, comentar ou quando o professor liberar um curso, mesmo com o app fechado.</p>
+                <button type="button" class="btn mini" id="nt-ativar">Ativar notificações</button>`}
+        </div>`;
+      $$('[data-pref]', el).forEach(c => c.addEventListener('change', async () => {
+        try { const r = await VB.api('/api/notificacoes/preferencias', { method: 'PUT', body: { [c.dataset.pref]: c.checked } }); d.prefs = r.prefs; VB.toast('Preferência salva'); } catch (er) { VB.erro(er); c.checked = !c.checked; }
+      }));
+      const at = $('#nt-ativar', el);
+      if (at) at.addEventListener('click', async () => {
+        at.disabled = true;
+        try {
+          const perm = await Notification.requestPermission();
+          if (perm !== 'granted') { VB.toast('Sem permissão, as notificações não chegam neste aparelho.', true); return desenhar(); }
+          const reg = await navigator.serviceWorker.ready;
+          const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(d.chave) });
+          await VB.api('/api/push/aparelho', { method: 'POST', body: { inscricao: s.toJSON() } });
+          await VB.api('/api/notificacoes/preferencias', { method: 'PUT', body: { celular: true } });
+          VB.toast('Notificações ativadas'); desenhar();
+        } catch (er) { VB.toast('Não foi possível ativar neste aparelho. ' + (er.message || ''), true); at.disabled = false; }
+      });
+      const te = $('#nt-teste', el); if (te) te.addEventListener('click', async () => { try { await VB.api('/api/push/teste', { method: 'POST' }); VB.toast('Teste enviado. Ele chega em alguns segundos.'); } catch (er) { VB.erro(er); } });
+      const de = $('#nt-desligar', el);
+      if (de) de.addEventListener('click', async () => {
+        try { const s = await inscricaoAtual(); if (s) { await VB.api('/api/push/aparelho', { method: 'DELETE', body: { endpoint: s.endpoint } }); await s.unsubscribe(); } VB.toast('Desativadas neste aparelho'); desenhar(); } catch (er) { VB.erro(er); }
+      });
+    };
+    desenhar();
+  };
 })();
