@@ -58,6 +58,10 @@ window.VB = (function () {
   };
   VB.iniciais = nome => String(nome || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0].toUpperCase()).join('');
   VB.primeiroNome = nome => String(nome || '').trim().split(/\s+/)[0];
+  // Foto de perfil (ou as iniciais quando a pessoa ainda não pôs foto)
+  VB.avatar = (p, cls = '') => p && p.foto
+    ? `<img class="avatar foto ${cls}" src="${esc(p.foto)}" alt="" loading="lazy" decoding="async">`
+    : `<span class="avatar ${cls}" aria-hidden="true">${esc(VB.iniciais(p && p.nome))}</span>`;
   VB.saudacao = () => { const h = new Date().getHours(); return h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'; };
 
   // ── Ícones (traço 1.8)
@@ -233,7 +237,7 @@ window.VB = (function () {
       try {
         await VB.api('/api/login', { method: 'POST', body: { usuario: f.get('usuario'), senha: f.get('senha') } });
         await VB.carregarMe(); await VB.carregarBiblioteca();
-        location.hash = VB.me.papel === 'professor' ? '#/p/painel' : '#/inicio';
+        location.hash = '#/inicio';
         VB.rota();
       } catch (er) { VB.$('#erro-login').textContent = er.message; b.disabled = false; }
     });
@@ -743,7 +747,7 @@ window.VB = (function () {
   VB.abrir3D = function (modelo, parte) {
     document.querySelector('.v3d-fundo')?.remove();
     const f = document.createElement('div'); f.className = 'v3d-fundo'; f.setAttribute('role', 'dialog'); f.setAttribute('aria-label', 'Ilustração em 3D');
-    f.innerHTML = `<iframe src="/3d/#${encodeURIComponent(modelo || '')}${parte ? '-' + encodeURIComponent(parte) : ''}" title="Ilustração em 3D" allow="fullscreen"></iframe>`;
+    f.innerHTML = `<iframe src="/3d/?v=22#${encodeURIComponent(modelo || '')}${parte ? '-' + encodeURIComponent(parte) : ''}" title="Ilustração em 3D" allow="fullscreen"></iframe>`;
     document.body.appendChild(f); document.body.classList.add('v3d-aberto');
     const fechar = () => { f.remove(); document.body.classList.remove('v3d-aberto'); removeEventListener('message', msg); removeEventListener('keydown', esc3d); };
     const msg = e => { if (e.origin === location.origin && e.data && e.data.tipo === 'fechar-3d') fechar(); };
@@ -799,7 +803,7 @@ window.VB = (function () {
   VB.registrar = (padrao, papel, fn) => VB.rotas.push({ padrao, papel, fn });
   VB.rota = async function () {
     if (!VB.me) return VB.telaLogin();
-    const h = location.hash.replace(/^#/, '') || (VB.me.papel === 'professor' ? '/p/painel' : '/inicio');
+    const h = location.hash.replace(/^#/, '') || '/inicio';
     for (const r of VB.rotas) {
       const m = h.match(r.padrao);
       if (m && (r.papel === 'todos' || r.papel === VB.me.papel)) {
@@ -808,7 +812,7 @@ window.VB = (function () {
         return;
       }
     }
-    location.hash = VB.me.papel === 'professor' ? '#/p/painel' : '#/inicio';
+    location.hash = '#/inicio';
   };
   VB.iniciar = async function () {
     VB.aplicarPrefs();

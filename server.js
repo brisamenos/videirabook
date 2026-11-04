@@ -30,6 +30,7 @@ const ESTATICOS = {
   '/js/professor.js': 'professor.js',
   '/js/sermao.js': 'sermao.js',
   '/js/estudo-leitor.js': 'estudo-leitor.js',
+  '/js/rede.js': 'rede.js',
   '/img/logo.svg': 'logo.svg',
   '/fonts/newsreader-latin-opsz-normal.woff2': 'newsreader-latin-opsz-normal.woff2',
   '/fonts/newsreader-latin-opsz-italic.woff2': 'newsreader-latin-opsz-italic.woff2',
@@ -120,7 +121,7 @@ function emitirToken(res, u) {
 function auth(req, res, next) {
   try {
     const dados = jwt.verify(req.cookies.vb_token || '', SECRET);
-    const u = db.prepare('SELECT id, nome, usuario, telefone, papel, ativo FROM usuarios WHERE id = ?').get(dados.id);
+    const u = db.prepare('SELECT id, nome, usuario, telefone, papel, ativo, foto FROM usuarios WHERE id = ?').get(dados.id);
     if (!u || !u.ativo) return res.status(401).json({ erro: 'Sessão encerrada. Entre novamente.' });
     req.user = u;
     next();
@@ -150,7 +151,7 @@ app.post('/api/logout', (req, res) => { res.clearCookie('vb_token'); res.json({ 
 app.get('/api/me', auth, h((req, res) => {
   const cfg = getConfig(); for (const k of Object.keys(cfg)) if (k[0] === '_') delete cfg[k];
   const SR = require('./sermoes');
-  res.json({ usuario: { ...req.user, ia: SR.podeIA(req.user), ia_motivo: SR.motivoIA(req.user), estudo: require('./estudo').podeEstudo(req.user) }, config: cfg });
+  res.json({ usuario: { ...req.user, foto: req.user.foto ? `/arquivos/${encodeURIComponent(req.user.foto)}` : null, ia: SR.podeIA(req.user), ia_motivo: SR.motivoIA(req.user), estudo: require('./estudo').podeEstudo(req.user) }, config: cfg });
 }));
 app.put('/api/me/senha', auth, h((req, res) => {
   const { atual, nova } = req.body || {};
@@ -165,7 +166,8 @@ app.put('/api/me/senha', auth, h((req, res) => {
 app.get('/arquivos/:nome', auth, (req, res) => {
   const p = path.join(UPLOAD_DIR, path.basename(req.params.nome));
   if (!fs.existsSync(p)) return res.status(404).send('Arquivo não encontrado');
-  res.sendFile(p);
+  // fotos da rede da turma têm nome único: o aparelho pode guardar em cache
+  res.sendFile(p, path.basename(p).startsWith('rede-') ? { maxAge: '30d', immutable: true, cacheControl: true } : {});
 });
 
 // ── Regras de acesso e progresso
@@ -883,6 +885,7 @@ const SERMOES = require('./sermoes');
 SERMOES(app, P, auth, h);
 // ── Bíblia de estudo e grifos
 require('./estudo')(app, P, auth, h, upload);
+require('./mural')(app, P, auth, h);
 
 // O site Bíblia Online deixa ser aberto dentro de outra página? (verificado 1x por dia)
 let embutir = { permitido: null, em: 0 };

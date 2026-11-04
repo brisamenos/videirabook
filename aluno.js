@@ -22,7 +22,7 @@
         </nav>
         <button class="btn-leitura" type="button" id="btn-leitura" aria-label="Ajustes de leitura: tamanho das letras e leitura noturna" title="Tamanho das letras e leitura noturna">Aa</button>
         <a class="usuario-chip" href="#/perfil" style="text-decoration:none;color:inherit" aria-label="Meu perfil">
-          <span class="avatar">${esc(VB.iniciais(VB.me.nome))}</span>
+          ${VB.avatar(VB.me)}
           <span class="nome pequeno">${esc(VB.primeiroNome(VB.me.nome))}</span>
         </a>
       </div></header>
@@ -92,15 +92,19 @@
         ${d.avisos.length ? d.avisos.slice(0, 3).map(avisoHtml).join('') : '<p class="muted" style="margin:0">Nenhum aviso por enquanto.</p>'}
       </div>`;
 
+    // Início: o mural da turma (status, publicações) no centro; encontro, progresso e avisos ao lado
     $('#conteudo').innerHTML = `
-      <div class="saudacao">
+      <div class="saudacao saudacao-rede">
         <div><h1>${VB.saudacao()}, ${esc(VB.primeiroNome(VB.me.nome))}</h1>
         <p>${esc(cfg.nome_turma || '')}${cfg.dia_semana ? ` · encontros às ${VB.DIAS[Number(cfg.dia_semana)].toLowerCase()}s` : ''}</p></div>
       </div>
-      <div class="inicio-grade">
-        <div>${blocoEncontro}${blocoContinuar ? `<div style="margin-top:20px">${blocoContinuar}</div>` : ''}<div style="margin-top:20px">${blocoAvisos}</div></div>
-        <div>${blocoProgresso}</div>
+      <div id="status-topo"></div>
+      <div class="inicio-grade inicio-rede">
+        <aside class="inicio-lado" aria-label="Seu estudo">${blocoEncontro}${blocoContinuar ? `<div style="margin-top:20px">${blocoContinuar}</div>` : ''}
+          <div class="so-largo">${blocoProgresso ? `<div style="margin-top:20px">${blocoProgresso}</div>` : ''}<div style="margin-top:20px">${blocoAvisos}</div></div></aside>
+        <section class="inicio-mural" id="inicio-mural" aria-label="Mural da turma"></section>
       </div>`;
+    if (VB.rede) VB.rede.montar($('#inicio-mural'), $('#status-topo'));
   });
 
   function avisoHtml(a) {
@@ -741,6 +745,7 @@
     $('#conteudo').innerHTML = `<div class="estreita">
       <div class="saudacao"><div><h1>Meu perfil</h1><p>${esc(VB.me.nome)} · usuário <strong>${esc(VB.me.usuario)}</strong></p></div>
       <button class="btn sec" id="sair">${icone.sair}Sair</button></div>
+      <div class="painel" id="perfil-foto" style="max-width:460px;margin-bottom:16px"></div>
       <form class="painel" id="form-senha" style="max-width:460px">
         <h3>Trocar senha</h3>
         <label class="campo"><span>Senha atual</span><input class="input" type="password" name="atual" autocomplete="current-password" required></label>
@@ -753,6 +758,7 @@
         <button class="btn sec" type="button" id="abrir-leitura">Ajustar leitura</button>
       </div></div>`;
     $('#abrir-leitura').addEventListener('click', VB.painelLeitura);
+    if (VB.rede) VB.rede.blocoFoto($('#perfil-foto')); else $('#perfil-foto').remove();
     $('#sair').addEventListener('click', VB.sair);
     $('#form-senha').addEventListener('submit', async e => {
       e.preventDefault();
